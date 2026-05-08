@@ -20,7 +20,8 @@ jobs:
         id: extract_tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="v0.1.0"
+            COMMIT_HASH=$(git rev-parse --short HEAD)
+            TAG="dev-${COMMIT_HASH}-$(date +%Y%m%d%H%M%S)"
           else
             TAG="${{ github.ref_name }}"
           fi
@@ -69,7 +70,7 @@ jobs:
           name: Release ${{ steps.extract_tag.outputs.tag }}
           body: ${{ fromJSON(steps.release_notes.outputs.result).body }}
           draft: false
-          prerelease: false
+          prerelease: ${{ startsWith(steps.extract_tag.outputs.tag, 'dev') }}
 
   build-macos:
     needs: create-release
