@@ -1850,6 +1850,232 @@ textarea {
 }
 
 /* ==========================================================================
+   同步页面重构 - 极简概览与操作台
+   ========================================================================== */
+
+.sync-page-header {
+  margin-bottom: 24px;
+}
+
+.sync-panel {
+  margin-bottom: 32px;
+}
+
+.sync-overview-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.sync-progress-grid,
+.sync-result-grid {
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 20px;
+}
+
+.sync-overview-grid .stat-cell,
+.sync-progress-grid .stat-cell,
+.sync-result-grid .stat-cell {
+  text-align: left;
+}
+
+.sync-overview-grid .stat-cell strong,
+.sync-progress-grid .stat-cell strong,
+.sync-result-grid .stat-cell strong {
+  font-size: 18px;
+}
+
+.sync-overview-grid .stat-cell small {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+
+.sync-action-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.sync-action-row .section-title {
+  margin-bottom: 4px;
+}
+
+.sync-action-row .section-subtitle {
+  margin-bottom: 0;
+}
+
+.sync-action-row .sync-button {
+  min-width: 220px;
+  padding: 16px 24px;
+  flex-shrink: 0;
+}
+
+.sync-button-config {
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+}
+
+.sync-button-config:hover:not(:disabled) {
+  box-shadow:
+    0 12px 20px -8px rgba(17, 24, 39, 0.3),
+    0 4px 8px -4px rgba(17, 24, 39, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+}
+
+.sync-inline-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sync-inline-alert span {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.08);
+  border-radius: 999px;
+}
+
+.sync-mode-hint {
+  margin-top: 10px;
+  text-align: left;
+}
+
+.sync-result-meta {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sync-result-actions {
+  margin-top: 16px;
+}
+
+.sync-activity-group + .sync-activity-group {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.sync-subsection-header {
+  margin-bottom: 12px;
+}
+
+.sync-subsection-header h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sync-log-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sync-log-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.sync-log-filter {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  transition: all 120ms ease;
+}
+
+.sync-log-filter:hover {
+  color: var(--text-primary);
+}
+
+.sync-log-filter.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.sync-text-button {
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 120ms ease;
+}
+
+.sync-text-button:hover {
+  color: var(--text-primary);
+}
+
+@media (max-width: 900px) {
+  .sync-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sync-action-row .sync-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sync-overview-grid,
+  .sync-progress-grid,
+  .sync-result-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .export-item {
+    grid-template-columns: 56px 1fr;
+    align-items: start;
+  }
+
+  .export-file,
+  .export-note-id {
+    grid-column: 2;
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .sync-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .sync-overview-grid,
+  .sync-progress-grid,
+  .sync-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-selector {
+    width: 100%;
+  }
+
+  .mode-pill {
+    flex: 1;
+  }
+
+  .sync-log-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .sync-result-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* ==========================================================================
    新手引导
    ========================================================================== */
 

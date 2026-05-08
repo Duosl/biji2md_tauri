@@ -97,11 +97,16 @@ export function App() {
   const renderPage = () => {
     switch (currentPage) {
       case "sync":
-        return <SyncPage key={syncPageVersion} />;
+        return (
+          <SyncPage
+            key={syncPageVersion}
+            onOpenSettings={() => setCurrentPage("settings")}
+          />
+        );
       case "settings":
         return <SettingsPage />;
       default:
-        return <SyncPage />;
+        return <SyncPage onOpenSettings={() => setCurrentPage("settings")} />;
     }
   };
 
