@@ -41,6 +41,14 @@ impl IndexManager {
         self.index.notes.iter().any(|entry| entry.id == note_id)
     }
 
+    pub fn get_file_path(&self, note_id: &str) -> Option<&str> {
+        self.index
+            .notes
+            .iter()
+            .find(|entry| entry.id == note_id)
+            .map(|entry| entry.file_path.as_str())
+    }
+
     pub fn update_note_entry(&mut self, note: &Note, file_path: impl Into<String>) {
         let new_entry = IndexEntry {
             id: note.id.clone(),
@@ -74,6 +82,14 @@ impl IndexManager {
 
     pub fn mark_full_sync_at(&mut self, timestamp: u64) {
         self.index.last_full_sync_at = Some(timestamp);
+    }
+
+    pub fn get_last_sync_at(&self) -> Option<u64> {
+        self.index.last_sync_at
+    }
+
+    pub fn get_last_full_sync_at(&self) -> Option<u64> {
+        self.index.last_full_sync_at
     }
 
     pub fn save(&self) -> Result<(), String> {

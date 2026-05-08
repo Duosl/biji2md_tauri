@@ -11,7 +11,10 @@ use tokio::time::sleep;
 
 use crate::{
     api::ApiClient,
+    commands::open_export_dir_path,
+    config::load_config,
     export::Exporter,
+    history::{ExportCollector, HistoryManager},
     index::IndexManager,
     state::RuntimeState,
     types::{
@@ -52,9 +55,15 @@ async fn run_sync_inner(
     emit_log(app, "info", &format!("同步模式：{}", mode.as_str()))?;
     emit_log(app, "info", &format!("输出目录：{export_dir}"))?;
 
+    let config = load_config()?;
     let client = ApiClient::new(&token)?;
     let mut index = IndexManager::load(&export_dir)?;
-    let exporter = Exporter::new(&export_dir)?;
+    let exporter = Exporter::new(
+        &export_dir,
+        config.export_structure.as_deref(),
+        config.file_name_pattern.as_deref(),
+    )?;
+    let open_output_dir_after_sync = config.open_output_dir_after_sync.unwrap_or(false);
     let previous_last_note_id = index.get_last_note_id();
 
     emit_log(
@@ -89,6 +98,7 @@ async fn run_sync_inner(
     let mut counters = SyncCounters::default();
     let mut processed_count = 0_u32;
     let mut cancelled = false;
+    let mut export_collector = ExportCollector::default();
 
     loop {
         if is_cancelled(&cancel_flag) {
@@ -101,12 +111,24 @@ async fn run_sync_inner(
             "info",
             &format!(
                 "[拉取] 第 {page_num} 页开始：since_id={}，limit={page_size}，sort=create_asc",
-                if cursor.is_empty() { "(空)" } else { cursor.as_str() }
+                if cursor.is_empty() {
+                    "(空)"
+                } else {
+                    cursor.as_str()
+                }
             ),
         )?;
 
         let page = client
-            .get_notes_page(page_size as usize, if cursor.is_empty() { None } else { Some(cursor.as_str()) }, "create_asc")
+            .get_notes_page(
+                page_size as usize,
+                if cursor.is_empty() {
+                    None
+                } else {
+                    Some(cursor.as_str())
+                },
+                "create_asc",
+            )
             .await?;
 
         emit_log(
@@ -127,7 +149,11 @@ async fn run_sync_inner(
         }
 
         if page.notes.is_empty() {
-            emit_log(app, "info", &format!("[分页] 第 {page_num} 页没有数据，同步结束。"))?;
+            emit_log(
+                app,
+                "info",
+                &format!("[分页] 第 {page_num} 页没有数据，同步结束。"),
+            )?;
             break;
         }
 
@@ -171,7 +197,12 @@ async fn run_sync_inner(
                 snapshot.page_notes = Some(page.notes.len() as u32);
             });
 
-            if !index.should_update_note(note) {
+            let previous_file_path = index.get_file_path(&note.id).map(str::to_string);
+            let next_file_path = exporter.preview_relative_path(note);
+            let needs_export = index.should_update_note(note)
+                || previous_file_path.as_deref() != Some(next_file_path.as_str());
+
+            if !needs_export {
                 counters.skipped += 1;
                 page_skipped += 1;
                 if can_advance_last_note_id {
@@ -194,7 +225,11 @@ async fn run_sync_inner(
                 continue;
             }
 
-            let action = if index.has(&note.id) { "updated" } else { "created" };
+            let action = if index.has(&note.id) {
+                "updated"
+            } else {
+                "created"
+            };
             emit_log(
                 app,
                 "info",
@@ -205,7 +240,11 @@ async fn run_sync_inner(
                         .unwrap_or_default(),
                     page_index + 1,
                     page.notes.len(),
-                    if action == "created" { "新增导出" } else { "更新导出" },
+                    if action == "created" {
+                        "新增导出"
+                    } else {
+                        "更新导出"
+                    },
                     if note.title.trim().is_empty() {
                         note.id.as_str()
                     } else {
@@ -214,7 +253,7 @@ async fn run_sync_inner(
                 ),
             )?;
 
-            match exporter.export_note(note) {
+            match exporter.export_note(note, previous_file_path.as_deref()) {
                 Ok(file_name) => {
                     index.update_note_entry(note, file_name.clone());
 
@@ -225,6 +264,14 @@ async fn run_sync_inner(
                         counters.updated += 1;
                         page_updated += 1;
                     }
+
+                    // 收集成功导出的项
+                    export_collector.add(
+                        note.id.clone(),
+                        note.title.clone(),
+                        action.to_string(),
+                        file_name.clone(),
+                    );
 
                     if can_advance_last_note_id {
                         next_last_note_id = Some(note.id.clone());
@@ -348,6 +395,23 @@ async fn run_sync_inner(
     }
     index.save()?;
 
+    // 保存同步历史记录
+    let recent_exports = export_collector.into_vec();
+    if let Ok(mut history) = HistoryManager::load(&export_dir) {
+        history.add_entry(
+            sync_timestamp,
+            mode.as_str(),
+            counters.total,
+            counters.created,
+            counters.updated,
+            counters.skipped,
+            counters.failed,
+            cancelled,
+            recent_exports,
+        );
+        let _ = history.save();
+    }
+
     let final_status = if cancelled {
         SyncStatus::Completed
     } else {
@@ -385,6 +449,10 @@ async fn run_sync_inner(
         },
     )?;
 
+    if !cancelled && open_output_dir_after_sync {
+        let _ = open_export_dir_path(std::path::Path::new(&export_dir));
+    }
+
     Ok(())
 }
 
@@ -410,6 +478,7 @@ fn is_cancelled(flag: &Arc<AtomicBool>) -> bool {
 }
 
 fn emit_log(app: &AppHandle, level: &str, message: &str) -> Result<(), String> {
+    eprintln!("[DEBUG] emit_log: {}", message);
     app.emit(
         "sync_log",
         SyncLogEvent {

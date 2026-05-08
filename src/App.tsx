@@ -1,13 +1,14 @@
 /* ==========================================================================
-   应用入口 - 路由布局与导航
+   应用入口 - 路由布局与导航（含新手引导）
    ========================================================================== */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Toolbar } from "./components/Toolbar";
 import { SyncPage } from "./pages/SyncPage";
-
 import { SettingsPage } from "./pages/SettingsPage";
-import type { PageKey, NavItem } from "./types";
+import { OnboardingGuide } from "./components/OnboardingGuide";
+import type { PageKey, NavItem, Settings } from "./types";
 
 const navItems: NavItem[] = [
   { key: "sync", label: "笔记同步", icon: "sync" },
@@ -54,17 +55,66 @@ function Icon({ name }: { name: string }) {
 export function App() {
   const [currentPage, setCurrentPage] = useState<PageKey>("sync");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [syncPageVersion, setSyncPageVersion] = useState(0);
+  const [onboardingState, setOnboardingState] = useState({
+    hasToken: false,
+    hasExportDir: false
+  });
+
+  // 检查是否需要显示新手引导
+  useEffect(() => {
+    async function checkOnboarding() {
+      try {
+        const settings = await invoke<Settings>("get_settings");
+        const hasToken = settings.hasToken;
+        const hasExportDir = !!settings.defaultOutputDir?.trim();
+        setOnboardingState({ hasToken, hasExportDir });
+        // 如果 Token 或导出目录未配置，显示引导
+        if (!hasToken || !hasExportDir) {
+          setShowOnboarding(true);
+        }
+      } catch (err) {
+        console.error("Failed to check onboarding status:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    checkOnboarding();
+  }, []);
+
+  const handleOnboardingComplete = () => {
+    setOnboardingState({ hasToken: true, hasExportDir: true });
+    setSyncPageVersion((current) => current + 1);
+    setShowOnboarding(false);
+  };
+
+  const handleOnboardingSkip = () => {
+    setShowOnboarding(false);
+  };
 
   const renderPage = () => {
     switch (currentPage) {
       case "sync":
-        return <SyncPage />;
+        return <SyncPage key={syncPageVersion} />;
       case "settings":
         return <SettingsPage />;
       default:
         return <SyncPage />;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="app-shell">
+        <div className="loading-screen">
+          <div className="loading-spinner" />
+          <p>加载中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -99,6 +149,15 @@ export function App() {
           {renderPage()}
         </main>
       </div>
+
+      {/* 新手引导弹窗 */}
+      <OnboardingGuide
+        isOpen={showOnboarding}
+        hasToken={onboardingState.hasToken}
+        hasExportDir={onboardingState.hasExportDir}
+        onComplete={handleOnboardingComplete}
+        onSkip={handleOnboardingSkip}
+      />
     </div>
   );
 }

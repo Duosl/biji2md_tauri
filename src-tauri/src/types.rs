@@ -119,6 +119,23 @@ pub struct SaveSettingsInput {
     pub default_page_size: Option<u32>,
     #[serde(default)]
     pub last_mode: Option<String>,
+    // 导出偏好设置
+    #[serde(default)]
+    pub export_structure: Option<String>,
+    #[serde(default)]
+    pub file_name_pattern: Option<String>,
+    #[serde(default)]
+    pub open_output_dir_after_sync: Option<bool>,
+    #[serde(default)]
+    pub show_sync_tips: Option<bool>,
+}
+
+// 单个字段保存请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSettingFieldInput {
+    pub field: String,
+    pub value: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -156,6 +173,11 @@ pub struct AppSettings {
     pub default_output_dir: Option<String>,
     pub default_page_size: u32,
     pub last_mode: String,
+    // 导出偏好设置
+    pub export_structure: String,
+    pub file_name_pattern: String,
+    pub open_output_dir_after_sync: bool,
+    pub show_sync_tips: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,6 +267,50 @@ pub struct SyncCompletedEvent {
     pub failed: u32,
     pub cancelled: bool,
     pub index_path: String,
+}
+
+// 同步历史记录项
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncHistoryEntry {
+    pub timestamp: u64,
+    pub mode: String,
+    pub total: u32,
+    pub created: u32,
+    pub updated: u32,
+    pub skipped: u32,
+    pub failed: u32,
+    pub cancelled: bool,
+    pub recent_exports: Vec<RecentExportItem>,
+}
+
+// 最近导出项
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentExportItem {
+    pub note_id: String,
+    pub title: String,
+    pub action: String,
+    pub file_path: String,
+}
+
+// 同步概览响应
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncOverview {
+    // 上次同步信息
+    pub last_sync_at: Option<u64>,
+    pub last_full_sync_at: Option<u64>,
+    pub last_mode: Option<String>,
+    // 上次结果摘要
+    pub last_summary: Option<SyncHistoryEntry>,
+    pub index_path: Option<String>,
+    // 统计
+    pub recent_failed_count: u32,
+    // 最近导出（最多5条）
+    pub recent_exports: Vec<RecentExportItem>,
+    // 配置状态
+    pub has_config: bool,
 }
 
 pub fn mask_secret(value: &str, visible_start: usize, visible_end: usize) -> String {

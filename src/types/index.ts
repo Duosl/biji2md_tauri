@@ -8,6 +8,11 @@ export type Settings = {
   defaultOutputDir?: string | null;
   defaultPageSize: number;
   lastMode: "incremental" | "full" | string;
+  // 导出偏好设置
+  exportStructure: "flat" | "by_month" | "by_tag";
+  fileNamePattern: "title_id" | "date_title_id";
+  openOutputDirAfterSync: boolean;
+  showSyncTips: boolean;
 };
 
 export type SyncCounters = {
@@ -54,11 +59,56 @@ export type SyncLogEvent = {
   message: string;
 };
 
+export type SyncItemEvent = {
+  pageNum: number;
+  pageIndex: number;
+  processedCount: number;
+  totalExpected?: number | null;
+  noteId: string;
+  title: string;
+  action: string;
+  filePath?: string | null;
+  error?: string | null;
+};
+
 export type LogEntry = {
   key: string;
   time: string;
   level: string;
   message: string;
+};
+
+// 最近导出项
+export type RecentExportItem = {
+  noteId: string;
+  title: string;
+  action: string;
+  filePath: string;
+};
+
+// 同步历史记录项
+export type SyncHistoryEntry = {
+  timestamp: number;
+  mode: string;
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  cancelled: boolean;
+  recentExports: RecentExportItem[];
+};
+
+// 同步概览
+export type SyncOverview = {
+  lastSyncAt?: number | null;
+  lastFullSyncAt?: number | null;
+  lastMode?: string | null;
+  lastSummary?: SyncHistoryEntry | null;
+  indexPath?: string | null;
+  recentFailedCount: number;
+  recentExports: RecentExportItem[];
+  hasConfig: boolean;
 };
 
 export type PageKey = "sync" | "automation" | "settings";

@@ -52,8 +52,7 @@ impl ApiClient {
             .map_err(|error| format!("failed to request notes: {error}"))?;
 
         let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err("鉴权失败，请检查 API Token 是否正确。".to_string());
         }
 

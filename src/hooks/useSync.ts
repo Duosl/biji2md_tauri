@@ -1,12 +1,14 @@
 /* ==========================================================================
-   同步逻辑 Hook - 状态与事件管理
+   同步逻辑 Hook - 状态与事件管理（含概览与最近导出）
    ========================================================================== */
 
 import {
   startTransition,
+  useCallback,
   useDeferredValue,
   useEffect,
   useEffectEvent,
+  useRef,
   useState
 } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -16,7 +18,10 @@ import type {
   SyncSnapshot,
   SyncCompletedEvent,
   SyncLogEvent,
-  LogEntry
+  SyncItemEvent,
+  LogEntry,
+  SyncOverview,
+  RecentExportItem
 } from "../types";
 
 const emptySnapshot: SyncSnapshot = {
@@ -51,12 +56,25 @@ export function useSync() {
     tokenMasked: null,
     defaultOutputDir: "",
     defaultPageSize: 100,
-    lastMode: "incremental"
+    lastMode: "incremental",
+    exportStructure: "flat",
+    fileNamePattern: "title_id",
+    openOutputDirAfterSync: false,
+    showSyncTips: true
   });
   const [snapshot, setSnapshot] = useState<SyncSnapshot>(emptySnapshot);
   const [summary, setSummary] = useState<SyncCompletedEvent | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const deferredLogs = useDeferredValue(logs);
+
+  // 同步概览数据
+  const [overview, setOverview] = useState<SyncOverview | null>(null);
+  // 最近导出的条目（实时收集）
+  const [recentExports, setRecentExports] = useState<RecentExportItem[]>([]);
+  // 失败的条目
+  const [failedItems, setFailedItems] = useState<RecentExportItem[]>([]);
+  // 初始化错误
+  const [initError, setInitError] = useState<string | null>(null);
 
   const appendLog = useEffectEvent((payload: SyncLogEvent) => {
     const time = new Date(payload.ts).toLocaleTimeString();
@@ -82,45 +100,110 @@ export function useSync() {
 
   const applyCompletion = useEffectEvent((event: SyncCompletedEvent) => {
     setSummary(event);
+    // 同步完成后刷新概览
+    loadOverview();
   });
 
+  // 处理同步条目事件
+  const handleSyncItem = useEffectEvent((payload: SyncItemEvent) => {
+    if (payload.action === "failed" && payload.error) {
+      setFailedItems((current) => {
+        const item: RecentExportItem = {
+          noteId: payload.noteId,
+          title: payload.title,
+          action: "failed",
+          filePath: payload.filePath ?? ""
+        };
+        const next = [item, ...current];
+        return next.slice(0, 10); // 最多保留10个失败项
+      });
+    } else if (payload.action === "created" || payload.action === "updated") {
+      if (payload.filePath) {
+        setRecentExports((current) => {
+          const item: RecentExportItem = {
+            noteId: payload.noteId,
+            title: payload.title,
+            action: payload.action,
+            filePath: payload.filePath as string
+          };
+          const next = [item, ...current];
+          return next.slice(0, 5); // 最多保留5个最近导出
+        });
+      }
+    }
+  });
+
+  // 加载同步概览
+  const loadOverview = useEffectEvent(async () => {
+    try {
+      const data = await invoke<SyncOverview>("get_sync_overview");
+      setOverview(data);
+    } catch (error) {
+      console.error("Failed to load sync overview:", error);
+    }
+  });
+
+  // 使用 ref 来防止重复注册监听器
+  const listenersRegistered = useRef(false);
+
   useEffect(() => {
-    let active = true;
+    if (listenersRegistered.current) {
+      return;
+    }
+
+    let mounted = true;
     let cleanup: Array<() => void> = [];
 
     async function boot() {
-      const [loadedSettings, loadedSnapshot] = await Promise.all([
-        invoke<Settings>("get_settings"),
-        invoke<SyncSnapshot>("get_sync_snapshot")
-      ]);
+      try {
+        const [loadedSettings, loadedSnapshot] = await Promise.all([
+          invoke<Settings>("get_settings"),
+          invoke<SyncSnapshot>("get_sync_snapshot")
+        ]);
 
-      if (!active) return;
+        // 加载概览数据
+        await loadOverview();
 
-      setSettings(loadedSettings);
-      applySnapshot(loadedSnapshot);
+        if (!mounted) return;
 
-      cleanup = await Promise.all([
-        listen<SyncSnapshot>("sync_state", ({ payload }) => {
-          applySnapshot(payload);
-        }),
-        listen<SyncLogEvent>("sync_log", ({ payload }) => {
-          appendLog(payload);
-        }),
-        listen<SyncCompletedEvent>("sync_completed", ({ payload }) => {
-          applyCompletion(payload);
-        })
-      ]);
+        setSettings(loadedSettings);
+        applySnapshot(loadedSnapshot);
+
+        // 注册事件监听器
+        cleanup = await Promise.all([
+          listen<SyncSnapshot>("sync_state", ({ payload }) => {
+            applySnapshot(payload);
+          }),
+          listen<SyncLogEvent>("sync_log", ({ payload }) => {
+            appendLog(payload);
+          }),
+          listen<SyncCompletedEvent>("sync_completed", ({ payload }) => {
+            applyCompletion(payload);
+          }),
+          listen<SyncItemEvent>("sync_item", ({ payload }) => {
+            handleSyncItem(payload);
+          })
+        ]);
+        listenersRegistered.current = true;
+        console.log("[DEBUG] Event listeners registered:", cleanup.length);
+      } catch (error) {
+        if (mounted) {
+          setInitError(String(error));
+        }
+      }
     }
 
-    boot().catch(() => {});
+    boot();
 
     return () => {
-      active = false;
+      mounted = false;
+      console.log("[DEBUG] Cleaning up event listeners:", cleanup.length);
       for (const unlisten of cleanup) {
         unlisten();
       }
+      listenersRegistered.current = false;
     };
-  }, [appendLog, applyCompletion, applySnapshot]);
+  }, []);
 
   const refreshSettings = async () => {
     const nextSettings = await invoke<Settings>("get_settings");
@@ -147,16 +230,26 @@ export function useSync() {
     mode: "incremental" | "full";
     pageSize: number;
   }) => {
+    console.log("[DEBUG] startSync hook called");
     setSummary(null);
     setLogs([]);
+    setRecentExports([]);
+    setFailedItems([]);
 
-    await invoke<Settings>("save_settings", {
-      input: {
-        defaultOutputDir: params.exportDir,
-        defaultPageSize: params.pageSize
-      }
-    });
+    console.log("[DEBUG] startSync: calling save_settings");
+    try {
+      await invoke<Settings>("save_settings", {
+        input: {
+          defaultOutputDir: params.exportDir,
+          defaultPageSize: params.pageSize
+        }
+      });
+      console.log("[DEBUG] startSync: save_settings returned");
+    } catch (e) {
+      console.warn("[DEBUG] startSync: save_settings failed (non-fatal):", e);
+    }
 
+    console.log("[DEBUG] startSync: calling start_sync command");
     await invoke("start_sync", {
       request: {
         exportDir: params.exportDir,
@@ -164,6 +257,7 @@ export function useSync() {
         pageSize: params.pageSize
       }
     });
+    console.log("[DEBUG] startSync: start_sync command returned");
   };
 
   const cancelSync = async () => {
@@ -172,15 +266,31 @@ export function useSync() {
 
   const clearLogs = () => setLogs([]);
 
+  // 打开导出目录
+  const openExportDir = useCallback(async (dir?: string) => {
+    const targetDir = dir || settings.defaultOutputDir;
+    if (!targetDir) return;
+    try {
+      await invoke("open_export_dir", { dir: targetDir });
+    } catch (error) {
+      console.error("Failed to open export dir:", error);
+    }
+  }, [settings.defaultOutputDir]);
+
   return {
     settings,
     snapshot,
     summary,
     logs: deferredLogs,
+    overview,
+    recentExports,
+    failedItems,
+    initError,
     refreshSettings,
     saveSettings,
     startSync,
     cancelSync,
-    clearLogs
+    clearLogs,
+    openExportDir
   };
 }

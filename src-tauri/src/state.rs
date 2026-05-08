@@ -1,8 +1,4 @@
-use std::sync::{
-    atomic::AtomicBool,
-    Arc,
-    Mutex,
-};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use crate::types::SyncSnapshot;
 
