@@ -19,10 +19,35 @@ use crate::{
     state::{AppState, RuntimeState},
     sync::run_sync,
     types::{
-        mask_secret, AppSettings, SaveSettingFieldInput, SaveSettingsInput, StartSyncRequest,
+        mask_secret, AppSettings, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput, StartSyncRequest,
         SyncOverview, SyncSnapshot, SyncStatus,
     },
 };
+
+#[tauri::command]
+pub fn get_platform_info() -> PlatformInfo {
+    let os = std::env::consts::OS;
+    match os {
+        "macos" => PlatformInfo {
+            platform: "macos".to_string(),
+            title_bar_height: 38,
+            has_traffic_lights: true,
+            window_controls_position: "left".to_string(),
+        },
+        "windows" => PlatformInfo {
+            platform: "windows".to_string(),
+            title_bar_height: 40,
+            has_traffic_lights: false,
+            window_controls_position: "right".to_string(),
+        },
+        _ => PlatformInfo {
+            platform: "linux".to_string(),
+            title_bar_height: 40,
+            has_traffic_lights: false,
+            window_controls_position: "right".to_string(),
+        },
+    }
+}
 
 #[tauri::command]
 pub fn save_token(token: String) -> Result<(), String> {

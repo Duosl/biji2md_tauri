@@ -63,25 +63,28 @@ export function App() {
     hasExportDir: false
   });
 
-  // 检查是否需要显示新手引导
   useEffect(() => {
-    async function checkOnboarding() {
+    async function initApp() {
       try {
+        const platformInfo = await invoke<{ platform: string; titleBarHeight: number }>("get_platform_info");
+        document.documentElement.dataset.platform = platformInfo.platform;
+        document.documentElement.style.setProperty("--title-bar-height", `${platformInfo.titleBarHeight}px`);
+        document.documentElement.style.setProperty("--window-controls-space", platformInfo.platform === "macos" ? "76px" : "0px");
+
         const settings = await invoke<Settings>("get_settings");
         const hasToken = settings.hasToken;
         const hasExportDir = !!settings.defaultOutputDir?.trim();
         setOnboardingState({ hasToken, hasExportDir });
-        // 如果 Token 或导出目录未配置，显示引导
         if (!hasToken || !hasExportDir) {
           setShowOnboarding(true);
         }
       } catch (err) {
-        console.error("Failed to check onboarding status:", err);
+        console.error("Failed to initialize app:", err);
       } finally {
         setIsLoading(false);
       }
     }
-    checkOnboarding();
+    initApp();
   }, []);
 
   const handleOnboardingComplete = () => {

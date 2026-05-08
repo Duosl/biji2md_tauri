@@ -13,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::default())
         .invoke_handler(tauri::generate_handler![
+            commands::get_platform_info,
             commands::save_token,
             commands::clear_token,
             commands::get_settings,

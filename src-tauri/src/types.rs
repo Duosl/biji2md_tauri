@@ -313,6 +313,15 @@ pub struct SyncOverview {
     pub has_config: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformInfo {
+    pub platform: String,         // macos, windows, linux
+    pub title_bar_height: u32,    // 平台默认标题栏高度
+    pub has_traffic_lights: bool, // macOS 红黄绿按钮
+    pub window_controls_position: String, // left 或 right
+}
+
 pub fn mask_secret(value: &str, visible_start: usize, visible_end: usize) -> String {
     if value.len() <= visible_start + visible_end {
         return "*".repeat(value.len().max(8));

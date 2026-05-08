@@ -26,11 +26,15 @@
   --danger: #dc2626;
   
   /* 系统字体 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
-  --font-mono: "SF Mono", "Menlo", "Monaco", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, "Ubuntu", "Noto Sans", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
   
   /* 尺寸 */
   --sidebar-width: 240px;
+  
+  /* 平台相关变量 (由 JS 注入默认值) */
+  --title-bar-height: 40px;
+  --window-controls-space: 0px;
 }
 
 * {
@@ -87,14 +91,14 @@ textarea {
 }
 
 /* ==========================================================================
-   工具栏 - macOS 标题栏区域
+   工具栏 - 跨平台标题栏区域
    ========================================================================== */
 
 .toolbar {
-  height: 38px;
+  height: var(--title-bar-height);
   display: flex;
   align-items: center;
-  background: transparent;  /* 透明背景，让系统标题栏透过来 */
+  background: transparent;
   position: relative;
   z-index: 100;
 }
@@ -103,7 +107,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 76px;  /* 留出系统按钮空间 */
+  margin-left: var(--window-controls-space);
 }
 
 .toolbar-center {
@@ -2410,4 +2414,34 @@ textarea {
     flex-direction: column;
     gap: 4px;
   }
+}
+
+/* ==========================================================================
+   平台特定适配
+   ========================================================================== */
+
+/* macOS Overlay 标题栏样式 */
+[data-platform="macos"] .toolbar {
+  --title-bar-height: 38px;
+  --window-controls-space: 76px;
+}
+
+/* Windows Fluent Design 适配 */
+[data-platform="windows"] .toolbar {
+  --title-bar-height: 40px;
+  --window-controls-space: 0px;
+}
+
+[data-platform="windows"] .toolbar-btn {
+  border-radius: 4px;
+}
+
+/* Linux GTK 适配 */
+[data-platform="linux"] .toolbar {
+  --title-bar-height: 40px;
+  --window-controls-space: 0px;
+}
+
+[data-platform="linux"] .toolbar-btn {
+  border-radius: 3px;
 }

@@ -153,6 +153,7 @@ pub struct SyncOverview {
 
 | 命令 | 功能 |
 |------|------|
+| get_platform_info() | 获取平台信息 (macos/windows/linux) |
 | save_token(token) | 保存 API Token |
 | get_settings() | 获取应用设置 |
 | save_settings(input) | 保存应用设置 |
@@ -241,3 +242,10 @@ npm run build:linux
 - 后端新增 `save_setting_field` 命令支持单个字段保存
 - 移除页面级保存按钮，每个字段独立显示保存状态
 - Token 仍保留独立保存按钮（安全考虑）
+
+### 阶段 E (跨平台适配) - 完成
+- 新增 `get_platform_info` Tauri 命令，返回平台类型、标题栏高度、窗口控制按钮位置
+- 前端启动时获取平台信息并注入 `data-platform` 属性与 CSS 变量
+- 工具栏布局改为数据驱动：`--title-bar-height`、`--window-controls-space` 变量
+- 字体栈增加 Ubuntu、Noto Sans、Consolas 支持
+- 平台特定 CSS 规则：macOS (38px, 76px 左侧空间)、Windows (40px, 圆角 4px)、Linux (40px, 圆角 3px)
