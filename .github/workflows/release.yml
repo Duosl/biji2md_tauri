@@ -1,4 +1,4 @@
-name: Build and Release
+name: Releases
 
 on:
   push:
@@ -115,14 +115,28 @@ jobs:
       - name: Build Universal Binary
         run: npm run build:mac
 
-      - name: Upload macOS (Universal Binary)
+      - name: Build Apple Silicon Binary
+        run: npm run build:mac-arm
+
+      - name: Build Intel Binary
+        run: npm run build:mac-intel
+
+      - name: Prepare macOS Release Assets
+        env:
+          VERSION: ${{ needs.create-release.outputs.tag_name }}
+        run: |
+          mkdir -p release-assets/macos
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "release-assets/macos/biji2md_${VERSION#v}_macos_universal.dmg"
+          cp src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg "release-assets/macos/biji2md_${VERSION#v}_macos_apple-silicon.dmg"
+          cp src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg "release-assets/macos/biji2md_${VERSION#v}_macos_intel.dmg"
+
+      - name: Upload macOS Installers
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.create-release.outputs.tag_name }}
         with:
           tag_name: ${{ needs.create-release.outputs.tag_name }}
-          files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/biji2md_${VERSION#v}_universal.dmg
+          files: release-assets/macos/*.dmg
 
   build-windows:
     needs: create-release
@@ -161,14 +175,20 @@ jobs:
       - name: Build Windows
         run: npm run build:windows
 
+      - name: Prepare Windows Release Assets
+        env:
+          VERSION: ${{ needs.create-release.outputs.tag_name }}
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets/windows
+          Copy-Item src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi "release-assets/windows/biji2md_$($env:VERSION.TrimStart('v'))_windows_x64.msi"
+
       - name: Upload Windows Installer
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.create-release.outputs.tag_name }}
         with:
           tag_name: ${{ needs.create-release.outputs.tag_name }}
-          files: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/biji2md_${VERSION#v}_x64_en-US.msi
+          files: release-assets/windows/*.msi
 
   build-linux:
     needs: create-release
@@ -222,13 +242,18 @@ jobs:
       - name: Build Linux
         run: npm run build:linux
 
+      - name: Prepare Linux Release Assets
+        env:
+          VERSION: ${{ needs.create-release.outputs.tag_name }}
+        run: |
+          mkdir -p release-assets/linux
+          cp src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage "release-assets/linux/biji2md_${VERSION#v}_linux_x64.AppImage"
+          cp src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb "release-assets/linux/biji2md_${VERSION#v}_linux_x64.deb"
+
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.create-release.outputs.tag_name }}
         with:
           tag_name: ${{ needs.create-release.outputs.tag_name }}
-          files: |
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/biji2md_${VERSION#v}_amd64.AppImage
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/biji2md_${VERSION#v}_amd64.deb
+          files: release-assets/linux/*

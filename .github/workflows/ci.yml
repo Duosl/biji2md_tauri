@@ -1,4 +1,4 @@
-name: CI
+name: lint
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  frontend-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
       - run: npm install
       - run: npm run frontend:typecheck
 
-  build-linux:
+  rust-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -65,7 +65,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Check build
+      - name: Cargo Check
         run: |
           cd src-tauri
           cargo check --release
