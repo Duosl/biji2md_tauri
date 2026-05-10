@@ -1,5 +1,5 @@
 /* ==========================================================================
-   同步逻辑 Hook - 状态与事件管理（含概览与最近导出）
+   同步逻辑 Hook - 状态与事件管理
    ========================================================================== */
 
 import {
@@ -21,7 +21,7 @@ import type {
   SyncItemEvent,
   LogEntry,
   SyncOverview,
-  RecentExportItem
+  FailedItem
 } from "../types";
 
 const emptySnapshot: SyncSnapshot = {
@@ -69,10 +69,8 @@ export function useSync() {
 
   // 同步概览数据
   const [overview, setOverview] = useState<SyncOverview | null>(null);
-  // 最近导出的条目（实时收集）
-  const [recentExports, setRecentExports] = useState<RecentExportItem[]>([]);
   // 失败的条目
-  const [failedItems, setFailedItems] = useState<RecentExportItem[]>([]);
+  const [failedItems, setFailedItems] = useState<FailedItem[]>([]);
   // 初始化错误
   const [initError, setInitError] = useState<string | null>(null);
 
@@ -108,28 +106,15 @@ export function useSync() {
   const handleSyncItem = useEffectEvent((payload: SyncItemEvent) => {
     if (payload.action === "failed" && payload.error) {
       setFailedItems((current) => {
-        const item: RecentExportItem = {
+        const item: FailedItem = {
           noteId: payload.noteId,
           title: payload.title,
           action: "failed",
-          filePath: payload.filePath ?? ""
+          error: payload.error ?? ""
         };
         const next = [item, ...current];
-        return next.slice(0, 10); // 最多保留10个失败项
+        return next.slice(0, 10);
       });
-    } else if (payload.action === "created" || payload.action === "updated") {
-      if (payload.filePath) {
-        setRecentExports((current) => {
-          const item: RecentExportItem = {
-            noteId: payload.noteId,
-            title: payload.title,
-            action: payload.action,
-            filePath: payload.filePath as string
-          };
-          const next = [item, ...current];
-          return next.slice(0, 5); // 最多保留5个最近导出
-        });
-      }
     }
   });
 
@@ -233,7 +218,6 @@ export function useSync() {
     console.log("[DEBUG] startSync hook called");
     setSummary(null);
     setLogs([]);
-    setRecentExports([]);
     setFailedItems([]);
 
     console.log("[DEBUG] startSync: calling save_settings");
@@ -283,7 +267,6 @@ export function useSync() {
     summary,
     logs: deferredLogs,
     overview,
-    recentExports,
     failedItems,
     initError,
     refreshSettings,

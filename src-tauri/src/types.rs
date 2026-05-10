@@ -281,17 +281,6 @@ pub struct SyncHistoryEntry {
     pub skipped: u32,
     pub failed: u32,
     pub cancelled: bool,
-    pub recent_exports: Vec<RecentExportItem>,
-}
-
-// 最近导出项
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct RecentExportItem {
-    pub note_id: String,
-    pub title: String,
-    pub action: String,
-    pub file_path: String,
 }
 
 // 同步概览响应
@@ -307,8 +296,6 @@ pub struct SyncOverview {
     pub index_path: Option<String>,
     // 统计
     pub recent_failed_count: u32,
-    // 最近导出（最多5条）
-    pub recent_exports: Vec<RecentExportItem>,
     // 配置状态
     pub has_config: bool,
 }

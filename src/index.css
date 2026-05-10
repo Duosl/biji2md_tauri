@@ -1189,72 +1189,41 @@ textarea {
   background: rgba(220, 38, 38, 0.08);
 }
 
-.exports-list {
+.failed-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.exports-empty {
-  padding: 24px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-
-.export-item {
+.failed-item {
   display: grid;
   grid-template-columns: 50px 1fr 120px;
   gap: 12px;
   align-items: center;
   padding: 10px 14px;
-  background: var(--bg-tertiary);
+  background: rgba(220, 38, 38, 0.06);
   border-radius: 8px;
   font-size: 13px;
   transition: all 150ms ease;
 }
 
-.export-item:hover {
-  background: var(--bg-secondary);
-}
-
-.export-item.failed {
-  background: rgba(220, 38, 38, 0.06);
-}
-
-.export-item.failed:hover {
+.failed-item:hover {
   background: rgba(220, 38, 38, 0.1);
 }
 
-.export-action {
+.failed-action {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-tertiary);
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.1);
   padding: 2px 8px;
-  background: var(--bg-primary);
   border-radius: 4px;
   text-align: center;
 }
 
-.export-item.created .export-action {
-  color: var(--success);
-  background: rgba(22, 163, 74, 0.1);
-}
-
-.export-item.updated .export-action {
-  color: var(--accent);
-  background: rgba(0, 102, 204, 0.1);
-}
-
-.export-item.failed .export-action {
-  color: var(--danger);
-  background: rgba(220, 38, 38, 0.1);
-}
-
-.export-title {
+.failed-title {
   color: var(--text-primary);
   font-weight: 500;
   white-space: nowrap;
@@ -1262,8 +1231,7 @@ textarea {
   text-overflow: ellipsis;
 }
 
-.export-file,
-.export-note-id {
+.failed-note-id {
   font-size: 12px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
@@ -1960,21 +1928,6 @@ textarea {
   margin-top: 16px;
 }
 
-.sync-activity-group + .sync-activity-group {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
-}
-
-.sync-subsection-header {
-  margin-bottom: 12px;
-}
-
-.sync-subsection-header h3 {
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .sync-log-actions {
   display: flex;
   align-items: center;
@@ -2036,13 +1989,12 @@ textarea {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .export-item {
+  .failed-item {
     grid-template-columns: 56px 1fr;
     align-items: start;
   }
 
-  .export-file,
-  .export-note-id {
+  .failed-note-id {
     grid-column: 2;
     text-align: left;
   }

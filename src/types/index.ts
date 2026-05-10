@@ -78,12 +78,11 @@ export type LogEntry = {
   message: string;
 };
 
-// 最近导出项
-export type RecentExportItem = {
+export type FailedItem = {
   noteId: string;
   title: string;
   action: string;
-  filePath: string;
+  error: string;
 };
 
 // 同步历史记录项
@@ -96,7 +95,6 @@ export type SyncHistoryEntry = {
   skipped: number;
   failed: number;
   cancelled: boolean;
-  recentExports: RecentExportItem[];
 };
 
 // 同步概览
@@ -107,7 +105,6 @@ export type SyncOverview = {
   lastSummary?: SyncHistoryEntry | null;
   indexPath?: string | null;
   recentFailedCount: number;
-  recentExports: RecentExportItem[];
   hasConfig: boolean;
 };
 

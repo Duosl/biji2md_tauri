@@ -140,7 +140,6 @@ pub struct SyncOverview {
     pub last_summary: Option<SyncHistoryEntry>,
     pub index_path: Option<String>,
     pub recent_failed_count: u32,
-    pub recent_exports: Vec<RecentExportItem>,
     pub has_config: bool,
 }
 ```
@@ -221,7 +220,7 @@ npm run build:linux
 - 新增 get_sync_overview 接口
 - 同步历史持久化 (history.json)
 - 首页展示上次同步摘要
-- 展示最近导出 5 条和失败项
+- 展示失败项
 
 ### 阶段 B+ (P1+) - 完成
 - 新增分步新手引导组件 (OnboardingGuide)

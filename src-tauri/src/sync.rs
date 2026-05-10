@@ -14,7 +14,7 @@ use crate::{
     commands::open_export_dir_path,
     config::load_config,
     export::Exporter,
-    history::{ExportCollector, HistoryManager},
+    history::HistoryManager,
     index::IndexManager,
     state::RuntimeState,
     types::{
@@ -98,7 +98,6 @@ async fn run_sync_inner(
     let mut counters = SyncCounters::default();
     let mut processed_count = 0_u32;
     let mut cancelled = false;
-    let mut export_collector = ExportCollector::default();
 
     loop {
         if is_cancelled(&cancel_flag) {
@@ -265,14 +264,6 @@ async fn run_sync_inner(
                         page_updated += 1;
                     }
 
-                    // 收集成功导出的项
-                    export_collector.add(
-                        note.id.clone(),
-                        note.title.clone(),
-                        action.to_string(),
-                        file_name.clone(),
-                    );
-
                     if can_advance_last_note_id {
                         next_last_note_id = Some(note.id.clone());
                     }
@@ -396,7 +387,6 @@ async fn run_sync_inner(
     index.save()?;
 
     // 保存同步历史记录
-    let recent_exports = export_collector.into_vec();
     if let Ok(mut history) = HistoryManager::load(&export_dir) {
         history.add_entry(
             sync_timestamp,
@@ -407,7 +397,6 @@ async fn run_sync_inner(
             counters.skipped,
             counters.failed,
             cancelled,
-            recent_exports,
         );
         let _ = history.save();
     }

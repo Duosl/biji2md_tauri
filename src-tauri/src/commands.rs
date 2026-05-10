@@ -447,24 +447,8 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
                 skipped: entry.skipped,
                 failed: entry.failed,
                 cancelled: entry.cancelled,
-                recent_exports: entry.recent_exports.clone(),
             })
     });
-
-    let recent_exports: Vec<crate::types::RecentExportItem> = history
-        .as_ref()
-        .map(|h| {
-            h.get_recent_exports(5)
-                .into_iter()
-                .map(|item| crate::types::RecentExportItem {
-                    note_id: item.note_id.clone(),
-                    title: item.title.clone(),
-                    action: item.action.clone(),
-                    file_path: item.file_path.clone(),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
 
     let recent_failed_count = history
         .as_ref()
@@ -483,7 +467,6 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
         last_summary,
         index_path,
         recent_failed_count,
-        recent_exports,
         has_config,
     })
 }

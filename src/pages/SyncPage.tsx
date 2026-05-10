@@ -59,20 +59,6 @@ function formatTimestamp(ts?: number | null): string {
   return date.toLocaleDateString("zh-CN");
 }
 
-function getActionLabel(action: string): string {
-  const labels: Record<string, string> = {
-    created: "新增",
-    updated: "更新",
-    failed: "失败"
-  };
-  return labels[action] || action;
-}
-
-function truncatePath(path: string, maxLen: number = 36) {
-  if (path.length <= maxLen) return path;
-  return `...${path.slice(-maxLen + 3)}`;
-}
-
 function isKeyLog(level: string, message: string) {
   if (level === "error" || level === "warn") {
     return true;
@@ -104,7 +90,6 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     summary,
     logs,
     overview,
-    recentExports,
     failedItems,
     saveSettings,
     startSync,
@@ -169,8 +154,6 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
         }
       : null;
 
-  const displayExports =
-    recentExports.length > 0 ? recentExports : overview?.recentExports || [];
   const filteredLogs = logs.filter((entry) => {
     if (logFilter === "error") {
       return entry.level === "error";
@@ -464,54 +447,24 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
         </section>
       )}
 
-      {!isRunning && (failedItems.length > 0 || displayExports.length > 0) && (
+      {!isRunning && failedItems.length > 0 && (
         <section className="section sync-panel">
           <div className="section-header">
-            <h3>最近活动</h3>
-            <span className="section-count">{failedItems.length + displayExports.length}</span>
+            <h3>失败项</h3>
+            <span className="section-count error">{failedItems.length}</span>
           </div>
 
-          {failedItems.length > 0 && (
-            <div className="sync-activity-group">
-              <div className="section-header sync-subsection-header">
-                <h3>失败项</h3>
-                <span className="section-count error">{failedItems.length}</span>
+          <div className="failed-list">
+            {failedItems.map((item, idx) => (
+              <div className="failed-item" key={`${item.noteId}-${idx}`}>
+                <span className="failed-action">失败</span>
+                <span className="failed-title" title={item.title}>
+                  {item.title || "未命名"}
+                </span>
+                <span className="failed-note-id">{item.noteId}</span>
               </div>
-              <div className="exports-list">
-                {failedItems.map((item, idx) => (
-                  <div className="export-item failed" key={`${item.noteId}-${idx}`}>
-                    <span className="export-action">失败</span>
-                    <span className="export-title" title={item.title}>
-                      {item.title || "未命名"}
-                    </span>
-                    <span className="export-note-id">{item.noteId}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {displayExports.length > 0 && (
-            <div className="sync-activity-group">
-              <div className="section-header sync-subsection-header">
-                <h3>最近导出</h3>
-                <span className="section-count">{displayExports.length}</span>
-              </div>
-              <div className="exports-list">
-                {displayExports.map((item, idx) => (
-                  <div className={`export-item ${item.action}`} key={`${item.noteId}-${idx}`}>
-                    <span className="export-action">{getActionLabel(item.action)}</span>
-                    <span className="export-title" title={item.title}>
-                      {item.title || "未命名"}
-                    </span>
-                    <span className="export-file" title={item.filePath}>
-                      {truncatePath(item.filePath, 28)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
         </section>
       )}
 

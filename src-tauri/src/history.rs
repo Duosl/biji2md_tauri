@@ -7,10 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::types::{RecentExportItem, SyncHistoryEntry};
+use crate::types::SyncHistoryEntry;
 
 const HISTORY_FILE: &str = "history.json";
-const MAX_RECENT_EXPORTS: usize = 5;
 
 pub struct HistoryManager {
     history_path: PathBuf,
@@ -50,7 +49,6 @@ impl HistoryManager {
         skipped: u32,
         failed: u32,
         cancelled: bool,
-        recent_exports: Vec<RecentExportItem>,
     ) {
         let entry = SyncHistoryEntry {
             timestamp,
@@ -61,16 +59,10 @@ impl HistoryManager {
             skipped,
             failed,
             cancelled,
-            recent_exports: recent_exports
-                .into_iter()
-                .rev()
-                .take(MAX_RECENT_EXPORTS)
-                .collect(),
         };
 
         self.entries.push(entry);
 
-        // 只保留最近 50 条记录
         if self.entries.len() > 50 {
             self.entries = self.entries.split_off(self.entries.len() - 50);
         }
@@ -88,18 +80,6 @@ impl HistoryManager {
         self.entries.last()
     }
 
-    pub fn get_recent_exports(&self, limit: usize) -> Vec<&RecentExportItem> {
-        let mut exports: Vec<&RecentExportItem> = self
-            .entries
-            .iter()
-            .rev()
-            .flat_map(|entry| &entry.recent_exports)
-            .take(limit)
-            .collect();
-        exports.truncate(limit);
-        exports
-    }
-
     pub fn get_recent_failed_count(&self) -> u32 {
         self.entries
             .iter()
@@ -107,26 +87,5 @@ impl HistoryManager {
             .take(1)
             .map(|entry| entry.failed)
             .sum()
-    }
-}
-
-// 用于收集导出项的临时存储
-#[derive(Default)]
-pub struct ExportCollector {
-    exports: Vec<RecentExportItem>,
-}
-
-impl ExportCollector {
-    pub fn add(&mut self, note_id: String, title: String, action: String, file_path: String) {
-        self.exports.push(RecentExportItem {
-            note_id,
-            title,
-            action,
-            file_path,
-        });
-    }
-
-    pub fn into_vec(self) -> Vec<RecentExportItem> {
-        self.exports
     }
 }
