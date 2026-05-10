@@ -2191,7 +2191,8 @@ textarea {
   color: var(--accent);
 }
 
-.welcome-icon svg {
+.welcome-icon svg,
+.welcome-icon .logo-img {
   width: 40px;
   height: 40px;
 }
@@ -2255,6 +2256,24 @@ textarea {
 
 .form-hint.success {
   color: var(--success);
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn:hover {
+  opacity: 0.8;
 }
 
 /* 成功状态 */

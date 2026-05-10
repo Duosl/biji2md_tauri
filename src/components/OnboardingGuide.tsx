@@ -4,6 +4,8 @@
 
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-shell";
+import logoUrl from "../assets/ic_logo.svg";
 
 interface OnboardingGuideProps {
   isOpen: boolean;
@@ -125,16 +127,14 @@ export function OnboardingGuide({
           {currentStep === "welcome" && (
             <div className="step-content">
               <div className="welcome-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                </svg>
+                <img src={logoUrl} alt="biji2md" className="logo-img" />
               </div>
               <h2>欢迎使用 biji2md</h2>
               <p>只需 3 步，即可开始将您的笔记导出为 Markdown 格式</p>
               <ul className="feature-list">
-                <li>📥 批量导出笔记为 Markdown</li>
-                <li>🔄 支持增量同步，只导出新内容</li>
-                <li>📁 本地存储，数据安全可控</li>
+                <li>批量导出笔记为 Markdown</li>
+                <li>支持增量同步，只导出新内容</li>
+                <li>本地存储，数据安全可控</li>
               </ul>
             </div>
           )}
@@ -153,6 +153,9 @@ export function OnboardingGuide({
                   rows={4}
                 />
                 <span className="form-hint">Token 仅保存在本地，不会上传到任何服务器</span>
+                <button className="link-btn" onClick={() => open("https://my.feishu.cn/wiki/FOBBw4Y5PisOU4k842VcIu0Sndb")}>
+                  如何获取 Token
+                </button>
               </div>
             </div>
           )}
@@ -249,7 +252,7 @@ export function OnboardingGuide({
 
           {currentStep === "ready" && (
             <button className="btn btn-primary btn-full" onClick={handleStart}>
-              开始同步笔记
+              开始使用
             </button>
           )}
         </div>
