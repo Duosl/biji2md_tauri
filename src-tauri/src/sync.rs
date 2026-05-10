@@ -11,7 +11,6 @@ use tokio::time::sleep;
 
 use crate::{
     api::ApiClient,
-    commands::open_export_dir_path,
     config::load_config,
     export::Exporter,
     history::HistoryManager,
