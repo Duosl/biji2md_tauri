@@ -1,7 +1,7 @@
 use reqwest::Client;
 use serde_json::Value;
 
-use crate::types::{Note, Tag};
+use crate::types::{Note, Tag, Topic};
 
 const BASE_URL: &str = "https://get-notes.luojilab.com";
 const NOTES_ENDPOINT: &str = "/voicenotes/web/notes";
@@ -131,12 +131,14 @@ fn note_from_value(value: &Value) -> Option<Note> {
     )
     .unwrap_or_default();
     let tags = parse_tags(value.get("tags").or_else(|| value.get("tag_list")));
+    let topics = parse_topics(value.get("topics"));
 
     Some(Note {
         id,
         title,
         content,
         tags,
+        topics,
         edit_time,
         created_at,
     })
@@ -165,6 +167,33 @@ fn parse_tags(value: Option<&Value>) -> Vec<Tag> {
             let id = string_field(item, &["id", "tag_id", "tagId"]);
 
             Some(Tag { id, name })
+        })
+        .collect()
+}
+
+fn parse_topics(value: Option<&Value>) -> Vec<Topic> {
+    let Some(value) = value else {
+        return Vec::new();
+    };
+
+    let Some(array) = value.as_array() else {
+        return Vec::new();
+    };
+
+    array
+        .iter()
+        .filter_map(|item| {
+            let topic_name = string_field(item, &["topic_name", "name", "title"])?;
+            let topic_id = item.get("topic_id").and_then(|v| v.as_i64());
+            let topic_id_alias = string_field(item, &["topic_id_alias", "alias"]);
+            let topic_scope = string_field(item, &["topic_scope", "scope"]);
+
+            Some(Topic {
+                topic_id,
+                topic_id_alias,
+                topic_name,
+                topic_scope,
+            })
         })
         .collect()
 }

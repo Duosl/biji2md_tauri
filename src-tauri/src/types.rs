@@ -36,6 +36,18 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Topic {
+    #[serde(default)]
+    pub topic_id: Option<i64>,
+    #[serde(default)]
+    pub topic_id_alias: Option<String>,
+    #[serde(default)]
+    pub topic_name: String,
+    #[serde(default)]
+    pub topic_scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Note {
     #[serde(default)]
     pub id: String,
@@ -45,6 +57,8 @@ pub struct Note {
     pub content: String,
     #[serde(default)]
     pub tags: Vec<Tag>,
+    #[serde(default)]
+    pub topics: Vec<Topic>,
     #[serde(default)]
     pub edit_time: String,
     #[serde(default)]

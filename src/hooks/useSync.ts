@@ -57,8 +57,8 @@ export function useSync() {
     defaultOutputDir: "",
     defaultPageSize: 100,
     lastMode: "incremental",
-    exportStructure: "flat",
-    fileNamePattern: "title_id",
+    exportStructure: "by_topic",
+    fileNamePattern: "title",
     showSyncTips: true
   });
   const [snapshot, setSnapshot] = useState<SyncSnapshot>(emptySnapshot);

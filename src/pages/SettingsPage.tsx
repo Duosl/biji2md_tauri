@@ -218,11 +218,11 @@ export function SettingsPage() {
               <input
                 type="radio"
                 name="exportStructure"
-                value="flat"
-                checked={settings.exportStructure === "flat"}
+                value="by_topic"
+                checked={settings.exportStructure === "by_topic"}
                 onChange={(e) => saveField("exportStructure", e.target.value)}
               />
-              <span>平铺（所有文件在同一目录）</span>
+              <span>按知识库分组</span>
             </label>
             <label className="radio-item">
               <input
@@ -244,6 +244,16 @@ export function SettingsPage() {
               />
               <span>按标签分组</span>
             </label>
+            <label className="radio-item">
+              <input
+                type="radio"
+                name="exportStructure"
+                value="flat"
+                checked={settings.exportStructure === "flat"}
+                onChange={(e) => saveField("exportStructure", e.target.value)}
+              />
+              <span>平铺（所有文件在同一目录）</span>
+            </label>
           </div>
         </div>
 
@@ -253,6 +263,16 @@ export function SettingsPage() {
             {renderFieldStatus("fileNamePattern")}
           </label>
           <div className="radio-group">
+            <label className="radio-item">
+              <input
+                type="radio"
+                name="fileNamePattern"
+                value="title"
+                checked={settings.fileNamePattern === "title"}
+                onChange={(e) => saveField("fileNamePattern", e.target.value)}
+              />
+              <span>仅标题</span>
+            </label>
             <label className="radio-item">
               <input
                 type="radio"

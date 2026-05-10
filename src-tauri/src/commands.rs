@@ -488,10 +488,10 @@ fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
         // 导出偏好设置（带默认值）
         export_structure: config
             .export_structure
-            .unwrap_or_else(|| "flat".to_string()),
+            .unwrap_or_else(|| "by_topic".to_string()),
         file_name_pattern: config
             .file_name_pattern
-            .unwrap_or_else(|| "title_id".to_string()),
+            .unwrap_or_else(|| "title".to_string()),
         show_sync_tips: config.show_sync_tips.unwrap_or(true),
     }
 }

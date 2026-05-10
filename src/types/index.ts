@@ -10,8 +10,8 @@ export type Settings = {
   defaultPageSize: number;
   lastMode: "incremental" | "full" | string;
   // 导出偏好设置
-  exportStructure: "flat" | "by_month" | "by_tag";
-  fileNamePattern: "title_id" | "date_title_id";
+  exportStructure: "flat" | "by_month" | "by_tag" | "by_topic";
+  fileNamePattern: "title" | "title_id" | "date_title_id";
   showSyncTips: boolean;
 };
 

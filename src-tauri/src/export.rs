@@ -10,10 +10,12 @@ enum ExportStructure {
     Flat,
     ByMonth,
     ByTag,
+    ByTopic,
 }
 
 #[derive(Clone, Copy)]
 enum FileNamePattern {
+    Title,
     TitleId,
     DateTitleId,
 }
@@ -50,6 +52,9 @@ impl Exporter {
             }
             ExportStructure::ByTag => {
                 format!("{}/{}", note_tag_dir(note), file_name)
+            }
+            ExportStructure::ByTopic => {
+                format!("{}/{}", note_topic_dir(note), file_name)
             }
         }
     }
@@ -92,6 +97,7 @@ impl ExportStructure {
         match value.unwrap_or("flat") {
             "by_month" => Self::ByMonth,
             "by_tag" => Self::ByTag,
+            "by_topic" => Self::ByTopic,
             _ => Self::Flat,
         }
     }
@@ -100,6 +106,7 @@ impl ExportStructure {
 impl FileNamePattern {
     fn from_optional(value: Option<&str>) -> Self {
         match value.unwrap_or("title_id") {
+            "title" => Self::Title,
             "date_title_id" => Self::DateTitleId,
             _ => Self::TitleId,
         }
@@ -114,6 +121,13 @@ fn render_note(note: &Note) -> String {
         .collect::<Vec<_>>()
         .join(", ");
 
+    let topics = note
+        .topics
+        .iter()
+        .map(|topic| yaml_string(&topic.topic_name))
+        .collect::<Vec<_>>()
+        .join(", ");
+
     let title = if note.title.trim().is_empty() {
         "未命名"
     } else {
@@ -123,10 +137,11 @@ fn render_note(note: &Note) -> String {
     let normalized_content = note.content.replace("\r\n", "\n");
 
     format!(
-        "---\ntitle: {}\nnote_id: {}\ntags: [{}]\ncreated_at: {}\nupdated_at: {}\n---\n\n{}\n",
+        "---\ntitle: {}\nnote_id: {}\ntags: [{}]\ntopics: [{}]\ncreated_at: {}\nupdated_at: {}\n---\n\n{}\n",
         yaml_string(title),
         yaml_string(&note.id),
         tags,
+        topics,
         yaml_string(&note.created_at),
         yaml_string(&note.edit_time),
         normalized_content
@@ -147,6 +162,7 @@ fn note_file_name(note: &Note, pattern: FileNamePattern) -> String {
 
     let id = sanitize_component(&note.id);
     match pattern {
+        FileNamePattern::Title => format!("{stem}.md"),
         FileNamePattern::TitleId => format!("{stem}__{id}.md"),
         FileNamePattern::DateTitleId => {
             let date = note_date_prefix(note);
@@ -167,6 +183,14 @@ fn note_tag_dir(note: &Note) -> String {
         .map(|tag| sanitize_component(tag.name.trim()))
         .find(|value| !value.is_empty())
         .unwrap_or_else(|| "untagged".to_string())
+}
+
+fn note_topic_dir(note: &Note) -> String {
+    note.topics
+        .iter()
+        .map(|topic| sanitize_component(topic.topic_name.trim()))
+        .find(|value| !value.is_empty())
+        .unwrap_or_else(|| "no-topic".to_string())
 }
 
 fn note_date_prefix(note: &Note) -> String {

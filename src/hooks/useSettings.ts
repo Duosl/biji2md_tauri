@@ -22,8 +22,8 @@ export function useSettings() {
     defaultOutputDir: "",
     defaultPageSize: 100,
     lastMode: "incremental",
-    exportStructure: "flat",
-    fileNamePattern: "title_id",
+    exportStructure: "by_topic",
+    fileNamePattern: "title",
     showSyncTips: true
   });
 
