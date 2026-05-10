@@ -125,8 +125,12 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
 
   const toggleLogs = () => {
     setShowLogs((prev) => {
+      const next = !prev;
       userCollapsedRef.current = prev;
-      return !prev;
+      if (next && !isRunning && logs.length === 0 && hasExportDir) {
+        void loadHistoryLogs(settings.defaultOutputDir || "");
+      }
+      return next;
     });
   };
 
@@ -453,12 +457,12 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
       <section className="section sync-panel">
         <div className={`log-list ${showLogs ? "expanded" : ""}`}>
           <div className="log-header" onClick={toggleLogs}>
-            <h3>诊断日志</h3>
-            <span className="log-count">{filteredLogs.length} / {logs.length}</span>
+            <h3>日志</h3>
+            <span className="log-count">{filteredLogs.length}</span>
           </div>
 
           <div className={`log-body ${showLogs ? "expanded" : ""}`}>
-            <div className="log-scroll">
+            <div className="log-body-inner">
             <div className="sync-log-filters">
               {LOG_FILTERS.map((filter) => (
                 <button
@@ -471,6 +475,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
               ))}
             </div>
 
+            <div className="log-scroll">
             {logs.length === 0 ? (
               <div className="logs-empty">暂无日志</div>
             ) : filteredLogs.length === 0 ? (
@@ -484,8 +489,9 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
                 </div>
               ))
             )}
+            </div>
+            </div>
           </div>
-        </div>
         </div>
       </section>
 

@@ -691,6 +691,12 @@ textarea {
 
 .log-body.expanded {
   grid-template-rows: 1fr;
+  max-height: 380px;
+}
+
+.log-body-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .log-header {
@@ -738,10 +744,9 @@ textarea {
 }
 
 .log-scroll {
-  max-height: 320px;
+  height: 280px;
   overflow-y: auto;
   background: var(--bg-primary);
-  min-height: 0;
 }
 
 .log-row {
@@ -2195,7 +2200,7 @@ textarea {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 999px;
-  margin: 12px 16px 8px;
+  margin: 8px 16px;
 }
 
 .sync-log-filter {
