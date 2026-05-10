@@ -15,6 +15,7 @@ use crate::{
     export::Exporter,
     history::HistoryManager,
     index::IndexManager,
+    log::SyncLog,
     state::RuntimeState,
     types::{
         StartSyncRequest, SyncCompletedEvent, SyncCounters, SyncItemEvent, SyncLogEvent, SyncMode,
@@ -30,10 +31,11 @@ pub async fn run_sync(
     request: StartSyncRequest,
     token: String,
 ) {
+    let export_dir = request.export_dir.clone();
     match run_sync_inner(&app, &state, request, token).await {
         Ok(()) => {}
         Err(message) => {
-            set_failed(&app, &state, &message);
+            set_failed(&app, &state, export_dir.as_deref(), &message);
         }
     }
 }
@@ -51,9 +53,11 @@ async fn run_sync_inner(
     let mode = SyncMode::from_optional(request.sync_mode.as_deref());
     let page_size = request.page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
 
-    emit_log(app, "info", &format!("同步模式：{}", mode.as_str()))?;
-    emit_log(app, "info", &format!("输出目录：{export_dir}"))?;
+    let log_manager = SyncLog::open(&export_dir)?;
+    log_manager.trim_if_needed()?;
 
+    emit_log(app, &log_manager, "info", &format!("同步模式：{}", mode.as_str()))?;
+    emit_log(app, &log_manager, "info", &format!("输出目录：{export_dir}"))?;
     let config = load_config()?;
     let client = ApiClient::new(&token)?;
     let mut index = IndexManager::load(&export_dir)?;
@@ -63,25 +67,23 @@ async fn run_sync_inner(
         config.file_name_pattern.as_deref(),
     )?;
     let previous_last_note_id = index.get_last_note_id();
-
-    emit_log(
-        app,
-        "info",
-        &format!(
-            "同步起点 last_note_id：{}",
-            previous_last_note_id
-                .clone()
-                .unwrap_or_else(|| "(空，首次同步)".to_string())
-        ),
-    )?;
+    let last_sync_at = index.get_last_sync_at();
 
     if matches!(mode, SyncMode::Incremental) {
-        emit_log(app, "info", "提示：增量模式按时间顺序获取新创建的笔记。")?;
-        emit_log(
-            app,
-            "info",
-            "提示：如果历史笔记有编辑，可执行全量同步来获取全量笔记。",
-        )?;
+        match last_sync_at {
+            Some(ts) => {
+                let time_str = format_timestamp(ts);
+                emit_log(
+                    app,
+                    &log_manager,
+                    "info",
+                    &format!("增量模式：将获取 {time_str} 之后新增或修改的笔记。"),
+                )?;
+            }
+            None => {
+                emit_log(app, &log_manager, "info", "增量模式：将按时间顺序获取全部笔记（首次同步）。")?;
+            }
+        }
     }
 
     let cancel_flag = current_cancel_flag(state)?;
@@ -96,6 +98,8 @@ async fn run_sync_inner(
     let mut counters = SyncCounters::default();
     let mut processed_count = 0_u32;
     let mut cancelled = false;
+    let mut last_emit_at = now_millis();
+    const EMIT_INTERVAL_MS: u64 = 500;
 
     loop {
         if is_cancelled(&cancel_flag) {
@@ -105,15 +109,9 @@ async fn run_sync_inner(
 
         emit_log(
             app,
+            &log_manager,
             "info",
-            &format!(
-                "[拉取] 第 {page_num} 页开始：since_id={}，limit={page_size}，sort=create_asc",
-                if cursor.is_empty() {
-                    "(空)"
-                } else {
-                    cursor.as_str()
-                }
-            ),
+            &format!("[拉取] 开始获取第 {page_num} 页数据..."),
         )?;
 
         let page = client
@@ -130,6 +128,7 @@ async fn run_sync_inner(
 
         emit_log(
             app,
+            &log_manager,
             "info",
             &format!(
                 "[拉取] 第 {page_num} 页完成：{} 条，hasMore={}{}",
@@ -141,13 +140,14 @@ async fn run_sync_inner(
             ),
         )?;
 
-        if matches!(mode, SyncMode::Full) && total_expected.is_none() {
+        if total_expected.is_none() {
             total_expected = page.total_items.and_then(|value| u32::try_from(value).ok());
         }
 
         if page.notes.is_empty() {
             emit_log(
                 app,
+                &log_manager,
                 "info",
                 &format!("[分页] 第 {page_num} 页没有数据，同步结束。"),
             )?;
@@ -194,6 +194,12 @@ async fn run_sync_inner(
                 snapshot.page_notes = Some(page.notes.len() as u32);
             });
 
+            let now = now_millis();
+            if now - last_emit_at >= EMIT_INTERVAL_MS {
+                let _ = emit_snapshot(app, state);
+                last_emit_at = now;
+            }
+
             let previous_file_path = index.get_file_path(&note.id).map(str::to_string);
             let next_file_path = exporter.preview_relative_path(note);
             let needs_export = index.should_update_note(note)
@@ -229,6 +235,7 @@ async fn run_sync_inner(
             };
             emit_log(
                 app,
+                &log_manager,
                 "info",
                 &format!(
                     "[总进度 {processed_count}{} | 第 {page_num} 页 {}/{}] {}：{}",
@@ -287,6 +294,7 @@ async fn run_sync_inner(
                     can_advance_last_note_id = false;
                     emit_log(
                         app,
+                        &log_manager,
                         "error",
                         &format!(
                             "[总进度 {processed_count}{} | 第 {page_num} 页 {}/{}] 导出失败：{}（{}）",
@@ -345,6 +353,7 @@ async fn run_sync_inner(
         emit_snapshot(app, state)?;
         emit_log(
             app,
+            &log_manager,
             "info",
             &format!(
                 "[分页] 第 {page_num} 页保存完成：新增 {page_created}，更新 {page_updated}，跳过 {page_skipped}，失败 {page_failed}；累计新增 {}，累计更新 {}，累计跳过 {}，累计失败 {}",
@@ -364,6 +373,7 @@ async fn run_sync_inner(
         let delay = 1000 + (page_num % 3) * 700;
         emit_log(
             app,
+            &log_manager,
             "info",
             &format!(
                 "[分页] 第 {page_num} 页完成，等待 {delay}ms 后继续请求第 {} 页...",
@@ -460,12 +470,19 @@ fn is_cancelled(flag: &Arc<AtomicBool>) -> bool {
     flag.load(Ordering::Relaxed)
 }
 
-fn emit_log(app: &AppHandle, level: &str, message: &str) -> Result<(), String> {
+fn emit_log(
+    app: &AppHandle,
+    log_manager: &SyncLog,
+    level: &str,
+    message: &str,
+) -> Result<(), String> {
     eprintln!("[DEBUG] emit_log: {}", message);
+    let ts = now_millis();
+    let _ = log_manager.append(ts, level, message);
     app.emit(
         "sync_log",
         SyncLogEvent {
-            ts: now_millis(),
+            ts,
             level: level.to_string(),
             message: message.to_string(),
         },
@@ -509,7 +526,12 @@ where
     }
 }
 
-fn set_failed(app: &AppHandle, state: &Arc<Mutex<RuntimeState>>, message: &str) {
+fn set_failed(
+    app: &AppHandle,
+    state: &Arc<Mutex<RuntimeState>>,
+    export_dir: Option<&str>,
+    message: &str,
+) {
     let finished_at = now_millis();
 
     if let Ok(mut guard) = state.lock() {
@@ -520,7 +542,11 @@ fn set_failed(app: &AppHandle, state: &Arc<Mutex<RuntimeState>>, message: &str) 
         guard.cancel_flag = None;
     }
 
-    let _ = emit_log(app, "error", message);
+    if let Some(dir) = export_dir {
+        if let Ok(log_manager) = SyncLog::open(dir) {
+            let _ = emit_log(app, &log_manager, "error", message);
+        }
+    }
     let _ = emit_snapshot(app, state);
 }
 
@@ -529,4 +555,49 @@ pub fn now_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+pub fn format_timestamp(ts_ms: u64) -> String {
+    let ts_sec = ts_ms / 1000;
+    let Some(dt) = UNIX_EPOCH.checked_add(Duration::from_secs(ts_sec)) else {
+        return "未知时间".to_string();
+    };
+    let Ok(duration) = dt.duration_since(UNIX_EPOCH) else {
+        return "未知时间".to_string();
+    };
+
+    let total_secs = duration.as_secs();
+    let days_since_epoch = total_secs / 86400;
+
+    let mut year = 1970_u32;
+    let mut rem = days_since_epoch;
+    loop {
+        let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        let dy = if leap { 366 } else { 365 };
+        if rem < dy {
+            break;
+        }
+        rem -= dy;
+        year += 1;
+    }
+
+    let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    let mdays = [31, if is_leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut month = 1_u32;
+    let mut day = rem + 1;
+    for (_i, &d) in mdays.iter().enumerate() {
+        if day <= d {
+            break;
+        }
+        day -= d;
+        month += 1;
+    }
+
+    let sod = total_secs % 86400;
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}",
+        sod / 3600,
+        (sod % 3600) / 60,
+        sod % 60
+    )
 }

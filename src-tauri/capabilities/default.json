@@ -7,6 +7,9 @@
     "core:default",
     "core:window:allow-start-dragging",
     "dialog:default",
-    "shell:default"
+    "shell:default",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download-and-install"
   ]
 }

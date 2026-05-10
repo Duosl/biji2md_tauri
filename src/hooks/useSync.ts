@@ -72,6 +72,8 @@ export function useSync() {
   const [failedItems, setFailedItems] = useState<FailedItem[]>([]);
   // 初始化错误
   const [initError, setInitError] = useState<string | null>(null);
+  // 同步错误（start_sync 命令失败或运行时失败）
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const appendLog = useEffectEvent((payload: SyncLogEvent) => {
     const time = new Date(payload.ts).toLocaleTimeString();
@@ -86,13 +88,16 @@ export function useSync() {
             message: payload.message
           }
         ];
-        return next.length > 400 ? next.slice(-400) : next;
+        return next.length > 500 ? next.slice(-500) : next;
       });
     });
   });
 
   const applySnapshot = useEffectEvent((next: SyncSnapshot) => {
     setSnapshot(next);
+    if (next.status === "failed" && !next.running) {
+      setSyncError(next.currentMessage || "同步失败");
+    }
   });
 
   const applyCompletion = useEffectEvent((event: SyncCompletedEvent) => {
@@ -218,6 +223,7 @@ export function useSync() {
     setSummary(null);
     setLogs([]);
     setFailedItems([]);
+    setSyncError(null);
 
     console.log("[DEBUG] startSync: calling save_settings");
     try {
@@ -233,14 +239,20 @@ export function useSync() {
     }
 
     console.log("[DEBUG] startSync: calling start_sync command");
-    await invoke("start_sync", {
-      request: {
-        exportDir: params.exportDir,
-        syncMode: params.mode,
-        pageSize: params.pageSize
-      }
-    });
-    console.log("[DEBUG] startSync: start_sync command returned");
+    try {
+      await invoke("start_sync", {
+        request: {
+          exportDir: params.exportDir,
+          syncMode: params.mode,
+          pageSize: params.pageSize
+        }
+      });
+      console.log("[DEBUG] startSync: start_sync command returned");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[DEBUG] startSync: start_sync command failed:", message);
+      setSyncError(message);
+    }
   };
 
   const cancelSync = async () => {
@@ -248,6 +260,28 @@ export function useSync() {
   };
 
   const clearLogs = () => setLogs([]);
+
+  // 清除同步错误
+  const clearSyncError = () => setSyncError(null);
+
+  // 从文件加载历史日志（懒加载）
+  const loadHistoryLogs = useCallback(async (exportDir: string) => {
+    try {
+      const data = await invoke<SyncLogEvent[]>("get_sync_logs", {
+        exportDir,
+        limit: 500
+      });
+      const entries: LogEntry[] = data.map((item, index) => ({
+        key: `${item.ts}-${index}`,
+        time: new Date(item.ts).toLocaleTimeString(),
+        level: item.level || "info",
+        message: item.message
+      }));
+      setLogs(entries);
+    } catch (error) {
+      console.error("Failed to load history logs:", error);
+    }
+  }, []);
 
   // 打开导出目录
   const openExportDir = useCallback(async (dir?: string) => {
@@ -268,11 +302,14 @@ export function useSync() {
     overview,
     failedItems,
     initError,
+    syncError,
     refreshSettings,
     saveSettings,
     startSync,
     cancelSync,
     clearLogs,
+    clearSyncError,
+    loadHistoryLogs,
     openExportDir
   };
 }

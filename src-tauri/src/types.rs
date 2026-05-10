@@ -321,6 +321,16 @@ pub struct PlatformInfo {
     pub window_controls_position: String, // left 或 right
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    pub available: bool,
+    pub version: Option<String>,
+    pub current_version: String,
+    pub body: Option<String>,
+    pub date: Option<String>,
+}
+
 pub fn mask_secret(value: &str, visible_start: usize, visible_end: usize) -> String {
     if value.len() <= visible_start + visible_end {
         return "*".repeat(value.len().max(8));

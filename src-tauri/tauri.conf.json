@@ -29,7 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": false,
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,5 +37,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVCQTE2MUVDMEEwM0Q5RTUKUldUbDJRTUs3R0doVzd3dllESmlFc1M1SjY5ZnU2SXpncGV4WFI2NHd0MXZqMnMyTTNTTUpNc0gK",
+      "endpoints": [
+        "https://kkgithub.com/https://github.com/duoshilin/biji2md/releases/latest/download/latest.json",
+        "https://github.com/duoshilin/biji2md/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

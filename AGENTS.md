@@ -23,13 +23,20 @@ biji2md/
 │   │   └── index.ts             # TypeScript 类型定义
 │   ├── hooks/
 │   │   ├── useSync.ts           # 同步逻辑 Hook
-│   │   └── useSettings.ts       # 设置管理 Hook
+│   │   ├── useSettings.ts       # 设置管理 Hook
+│   │   └── useUpdater.ts        # 自动更新 Hook
 │   ├── pages/
 │   │   ├── SyncPage.tsx         # 同步页面
 │   │   └── SettingsPage.tsx     # 设置页面
 │   └── components/
-│       └── Toolbar.tsx          # 工具栏组件
+│       ├── Toolbar.tsx          # 工具栏组件
+│       ├── OnboardingGuide.tsx  # 新手引导组件
+│       └── UpdateNotification.tsx  # 更新通知 Toast 组件
 ├── src-tauri/                   # Rust 后端
+│   ├── keys/                    # 签名密钥（公钥提交，私钥本地）
+│   │   └── biji2md.key.pub      # Tauri 更新签名公钥
+│   ├── capabilities/
+│   │   └── default.json         # 权限配置
 │   ├── src/
 │   │   ├── main.rs              # 程序入口
 │   │   ├── lib.rs               # 模块声明与 app 初始化
@@ -38,6 +45,7 @@ biji2md/
 │   │   ├── api.rs               # API 客户端
 │   │   ├── index.rs             # 本地索引管理
 │   │   ├── export.rs            # Markdown 导出逻辑
+│   │   ├── log.rs               # 同步日志持久化 (sync.log)
 │   │   ├── sync.rs              # 同步流程
 │   │   ├── history.rs           # 同步历史记录
 │   │   ├── state.rs             # 运行时状态
@@ -59,7 +67,8 @@ biji2md/
 | api.rs | API 客户端，处理网络请求 |
 | index.rs | 本地索引管理 (index.json) |
 | export.rs | Markdown 文件生成 |
-| sync.rs | 同步流程编排 |
+| log.rs | 同步日志持久化 (sync.log)，自动裁剪超 10MB 保留 1000 行 |
+| sync.rs | 同步流程编排，日志持久化与进度节流 |
 | history.rs | 同步历史记录 (history.json) |
 | state.rs | 运行时状态管理 |
 | commands.rs | Tauri 命令桥接层 |
@@ -68,8 +77,9 @@ biji2md/
 
 | 模块 | 职责 |
 |------|------|
-| useSync.ts | 同步状态管理、事件监听 |
+| useSync.ts | 同步状态管理、事件监听、错误捕获、历史日志加载 |
 | useSettings.ts | 设置加载/保存、脏状态检测 |
+| useUpdater.ts | 自动更新检测、静默下载、安装重启 |
 | SyncPage.tsx | 同步界面、状态展示 |
 | SettingsPage.tsx | 设置界面、配置编辑 |
 
@@ -86,7 +96,9 @@ start_sync(export_dir, mode, page_size)
   ↓
 验证 Token & 导出目录
   ↓
-初始化: ApiClient + IndexManager + Exporter
+初始化: ApiClient + IndexManager + Exporter + SyncLog
+  ↓
+同步开始时裁剪日志 (trim_if_needed)
   ↓
 循环拉取笔记分页
   ├─ 每页笔记处理
@@ -94,6 +106,8 @@ start_sync(export_dir, mode, page_size)
   │   ├─ export_note() → 导出 Markdown
   │   └─ update_note_entry() → 更新索引
   └─ 发送进度事件 (sync_state, sync_log, sync_item)
+     └─ 进度快照节流: 每 500ms 最多发送一次
+     └─ 日志同时持久化到 sync.log
   ↓
 保存索引 (index.json)
 保存历史 (history.json)
@@ -161,6 +175,10 @@ pub struct SyncOverview {
 | get_sync_overview() | 获取同步概览 |
 | start_sync(request) | 开始同步 |
 | cancel_sync() | 取消同步 |
+| check_update() | 检查更新（返回 UpdateInfo） |
+| install_update() | 下载并安装更新 |
+| get_app_version() | 获取当前应用版本号 |
+| get_sync_logs(export_dir, limit) | 从 sync.log 加载历史日志 |
 
 ---
 
@@ -255,3 +273,29 @@ npm run build:linux
 - 后端 AppSettings 新增 token 字段返回实际值
 - 设置页清空按钮改为危险色（btn-danger）
 - section-header 布局改为居左
+
+### 阶段 G (自动更新) - 完成
+- 新增 Tauri Updater 插件集成（tauri-plugin-updater + tauri-plugin-process）
+- 后端新增 `check_update`、`install_update`、`get_app_version` 三个命令
+- 前端 `useUpdater` Hook：启动时 + 每 24 小时静默检测，默认静默下载
+- 新增 `UpdateNotification` 底部浮动 Toast 组件（深色风格，与 app 设计语言一致）
+- 设置页添加版本信息展示和"检查更新"按钮
+- GitHub Actions Release 工作流升级：生成签名、updater 格式、latest.json
+- endpoints 配置 kkgithub (主) + GitHub (备) 双源 fallback
+- 签名密钥对已生成（公钥提交仓库，私钥需配置 GitHub Secrets）
+
+### 阶段 H (日志持久化 & 同步体验) - 完成
+- 新增 `log.rs` 模块：同步日志持久化到导出目录 `sync.log`，JSONL 格式
+- `SyncLog` 结构体：`open()` / `append()` / `read_recent()` / `trim_if_needed()`
+- 日志文件超 10MB 自动裁剪，保留最近 1000 行；同步开始时主动裁剪
+- `emit_log()` 改为同时写入文件和发送前端事件
+- 新增 `get_sync_logs` Tauri 命令，前端可从文件加载历史日志
+- `useSync` 新增 `syncError` 状态捕获同步失败、`clearSyncError()`、`loadHistoryLogs()`
+- 同步页日志区改为可折叠面板（自动展开/手动收起），不再限制预览条数
+- 同步页新增错误提示横幅（sync-error-alert），可关闭
+- 进度条新增不确定模式（indeterminate），未知总数时显示滑动动画
+- 进度快照发送节流至 500ms 间隔，减少前端渲染压力
+- 增量模式日志显示上次同步时间戳（`format_timestamp` 工具函数）
+- "打开导出目录"按钮移至操作区，同步结果区不再重复
+- 设置页新增"关于"区域：版本号展示 + 检查更新按钮 + 更新状态
+- App 集成 `useUpdater`，Toolbar 显示更新徽标，侧栏版本号动态获取

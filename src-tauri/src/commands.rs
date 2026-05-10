@@ -10,17 +10,19 @@ use std::{
 
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
+use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::oneshot;
 
 use crate::{
     config::{load_config, save_config},
     history::HistoryManager,
     index::IndexManager,
+    log::SyncLog,
     state::{AppState, RuntimeState},
     sync::run_sync,
     types::{
         mask_secret, AppSettings, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput, StartSyncRequest,
-        SyncOverview, SyncSnapshot, SyncStatus,
+        SyncLogEvent, SyncOverview, SyncSnapshot, SyncStatus, UpdateInfo,
     },
 };
 
@@ -461,6 +463,65 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
         recent_failed_count,
         has_config,
     })
+}
+
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> Result<UpdateInfo, String> {
+    let updater = app
+        .updater()
+        .map_err(|e| format!("updater not available: {e}"))?;
+
+    match updater.check().await {
+        Ok(Some(update)) => Ok(UpdateInfo {
+            available: true,
+            version: Some(update.version.clone()),
+            current_version: app.package_info().version.to_string(),
+            body: update.body.clone(),
+            date: update.date.map(|d| d.to_string()),
+        }),
+        Ok(None) => Ok(UpdateInfo {
+            available: false,
+            version: None,
+            current_version: app.package_info().version.to_string(),
+            body: None,
+            date: None,
+        }),
+        Err(e) => Err(format!("check update failed: {e}")),
+    }
+}
+
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    let updater = app
+        .updater()
+        .map_err(|e| format!("updater not available: {e}"))?;
+
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("check failed: {e}"))?
+        .ok_or_else(|| "no update available".to_string())?;
+
+    update
+        .download_and_install(
+            |_chunk: usize, _content_length: Option<u64>| {},
+            || {},
+        )
+        .await
+        .map_err(|e| format!("install failed: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[tauri::command]
+pub fn get_sync_logs(export_dir: String, limit: Option<usize>) -> Result<Vec<SyncLogEvent>, String> {
+    let log_manager = SyncLog::open(&export_dir)?;
+    log_manager.read_recent(limit.unwrap_or(500))
 }
 
 fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {

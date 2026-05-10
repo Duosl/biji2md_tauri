@@ -2,10 +2,8 @@
    同步页面 - 概览、操作、结果与诊断
    ========================================================================== */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSync } from "../hooks/useSync";
-
-const LOG_PREVIEW_COUNT = 12;
 
 const LOG_FILTERS = [
   { key: "all", label: "全部" },
@@ -65,18 +63,13 @@ function isKeyLog(level: string, message: string) {
 
   const normalized = message.toLowerCase();
   const markers = [
-    "开始同步",
-    "同步开始",
-    "sync start",
-    "分页",
-    "第 ",
-    "完成",
-    "成功",
-    "取消",
-    "index",
-    "history",
-    "导出",
-    "保存索引"
+    "[拉取]",
+    "[分页]",
+    "同步模式",
+    "增量模式",
+    "输出目录",
+    "同步完成",
+    "同步已取消"
   ];
 
   return markers.some((marker) => normalized.includes(marker.toLowerCase()));
@@ -90,40 +83,57 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     logs,
     overview,
     failedItems,
+    syncError,
     saveSettings,
     startSync,
     cancelSync,
+    clearSyncError,
+    loadHistoryLogs,
     openExportDir
   } = useSync();
 
   const [statusText, setStatusText] = useState("准备就绪");
-  const [showAllLogs, setShowAllLogs] = useState(false);
   const [logFilter, setLogFilter] = useState<LogFilterKey>("all");
+  const [showLogs, setShowLogs] = useState(false);
+  const userCollapsedRef = useRef(false);
 
   const mode = settings.lastMode === "full" ? "full" : "incremental";
   const hasToken = settings.hasToken;
   const hasExportDir = !!settings.defaultOutputDir?.trim();
   const isConfigComplete = hasToken && hasExportDir;
   const isRunning = snapshot.running;
-  const hasCurrentRun = snapshot.processedCount > 0 || isRunning || summary !== null;
+  const hasCurrentRun = (isRunning || syncError !== null) && (snapshot.processedCount > 0 || isRunning);
 
   useEffect(() => {
-    setStatusText(snapshot.currentMessage || (snapshot.running ? "同步中..." : "待机"));
-  }, [snapshot]);
-
-  useEffect(() => {
-    if (summary) {
-      setShowAllLogs(false);
+    if (syncError) {
+      setStatusText("同步失败");
+    } else {
+      setStatusText(snapshot.currentMessage || (snapshot.running ? "同步中..." : "待机"));
     }
-  }, [summary]);
+  }, [snapshot, syncError]);
 
+  const hasErrors = logs.some((l) => l.level === "error");
   useEffect(() => {
-    setShowAllLogs(false);
-  }, [logFilter]);
+    if (isRunning) userCollapsedRef.current = false;
+  }, [isRunning]);
+  useEffect(() => {
+    if (userCollapsedRef.current) return;
+    if (logs.length > 0 || hasErrors) {
+      setShowLogs(true);
+    }
+  }, [logs.length, hasErrors]);
 
-  const progressTotal = snapshot.totalExpected ?? snapshot.totalFetched ?? 0;
+  const toggleLogs = () => {
+    setShowLogs((prev) => {
+      userCollapsedRef.current = prev;
+      return !prev;
+    });
+  };
+
+  const hasRealTotal = snapshot.totalExpected != null && snapshot.totalExpected > 0;
+  const progressTotal = hasRealTotal ? snapshot.totalExpected! : 0;
   const progressRatio =
-    progressTotal > 0
+    hasRealTotal
       ? Math.min((snapshot.processedCount || 0) / progressTotal, 1)
       : 0;
 
@@ -160,9 +170,6 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     }
     return true;
   });
-  const visibleLogs = showAllLogs
-    ? filteredLogs
-    : filteredLogs.slice(-LOG_PREVIEW_COUNT);
   const missingItems = [
     !hasToken ? "Token" : null,
     !hasExportDir ? "导出目录" : null
@@ -331,10 +338,29 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
             : "全量会重新获取全部笔记，会覆盖本地修改过的笔记。请谨慎使用。"}
         </div>
 
+        <div className="sync-action-buttons">
+          <button className="btn btn-secondary" onClick={() => void openExportDir()}>
+            打开导出目录
+          </button>
+        </div>
+
         {isRunning && (
           <button className="cancel-link" onClick={() => void cancelSync()}>
             取消同步
           </button>
+        )}
+
+        {syncError && !isRunning && (
+          <div className="sync-error-alert">
+            <div className="sync-error-icon">⚠</div>
+            <div className="sync-error-content">
+              <strong>同步失败</strong>
+              <p>{syncError}</p>
+            </div>
+            <button className="sync-error-dismiss" onClick={() => clearSyncError()}>
+              ✕
+            </button>
+          </div>
         )}
       </section>
 
@@ -343,14 +369,16 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           <div className="progress-header">
             <span className="progress-title">同步进度</span>
             <span className="progress-count">
-              {snapshot.processedCount || 0} / {progressTotal || "-"}
+              {hasRealTotal
+                ? `${snapshot.processedCount || 0} / ${progressTotal}`
+                : `${snapshot.processedCount || 0}`}
             </span>
           </div>
 
           <div className="progress-track">
             <div
-              className="progress-fill"
-              style={{ width: `${progressRatio * 100}%` }}
+              className={`progress-fill${!hasRealTotal ? " indeterminate" : ""}`}
+              style={{ width: hasRealTotal ? `${progressRatio * 100}%` : "40%" }}
             />
           </div>
 
@@ -419,14 +447,47 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
               <span>失败</span>
             </div>
           </div>
-
-          <div className="btn-row sync-result-actions">
-            <button className="btn btn-secondary" onClick={() => void openExportDir()}>
-              打开导出目录
-            </button>
-          </div>
         </section>
       )}
+
+      <section className="section sync-panel">
+        <div className={`log-list ${showLogs ? "expanded" : ""}`}>
+          <div className="log-header" onClick={toggleLogs}>
+            <h3>诊断日志</h3>
+            <span className="log-count">{filteredLogs.length} / {logs.length}</span>
+          </div>
+
+          <div className={`log-body ${showLogs ? "expanded" : ""}`}>
+            <div className="log-scroll">
+            <div className="sync-log-filters">
+              {LOG_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  className={`sync-log-filter ${logFilter === filter.key ? "active" : ""}`}
+                  onClick={() => setLogFilter(filter.key)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {logs.length === 0 ? (
+              <div className="logs-empty">暂无日志</div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="logs-empty">当前筛选下没有日志</div>
+            ) : (
+              filteredLogs.map((entry) => (
+                <div className="log-row" key={entry.key}>
+                  <span className="log-time">{entry.time}</span>
+                  <span className={`log-tag ${entry.level}`}>{entry.level}</span>
+                  <span className="log-message">{entry.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        </div>
+      </section>
 
       {!isRunning && failedItems.length > 0 && (
         <section className="section sync-panel">
@@ -445,56 +506,6 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
                 <span className="failed-note-id">{item.noteId}</span>
               </div>
             ))}
-          </div>
-        </section>
-      )}
-
-      {hasCurrentRun && (
-        <section className="section sync-panel">
-          <div className="log-list">
-            <div className="log-header">
-              <h3>诊断日志</h3>
-              <div className="sync-log-actions">
-                <div className="sync-log-filters">
-                  {LOG_FILTERS.map((filter) => (
-                    <button
-                      key={filter.key}
-                      className={`sync-log-filter ${logFilter === filter.key ? "active" : ""}`}
-                      onClick={() => setLogFilter(filter.key)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-                <span className="log-count">
-                  {visibleLogs.length} / {filteredLogs.length}
-                </span>
-                {filteredLogs.length > LOG_PREVIEW_COUNT && (
-                  <button
-                    className="sync-text-button"
-                    onClick={() => setShowAllLogs((current) => !current)}
-                  >
-                    {showAllLogs ? "收起" : "显示全部"}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="log-scroll">
-              {logs.length === 0 ? (
-                <div className="logs-empty">等待同步开始...</div>
-              ) : filteredLogs.length === 0 ? (
-                <div className="logs-empty">当前筛选下没有日志</div>
-              ) : (
-                visibleLogs.map((entry) => (
-                  <div className="log-row" key={entry.key}>
-                    <span className="log-time">{entry.time}</span>
-                    <span className={`log-tag ${entry.level}`}>{entry.level}</span>
-                    <span className="log-message">{entry.message}</span>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </section>
       )}

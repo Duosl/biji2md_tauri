@@ -34,3 +34,7 @@ target/
 .env
 .env.local
 .env.*.local
+
+# Tauri signing keys (keep .pub, exclude private keys)
+src-tauri/keys/*.key
+!src-tauri/keys/*.pub

@@ -5,9 +5,11 @@
 interface ToolbarProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  updateReady: boolean;
+  onInstallUpdate: () => void;
 }
 
-export function Toolbar({ sidebarCollapsed, onToggleSidebar }: ToolbarProps) {
+export function Toolbar({ sidebarCollapsed, onToggleSidebar, updateReady, onInstallUpdate }: ToolbarProps) {
   const iconProps = {
     width: 16,
     height: 16,
@@ -40,6 +42,15 @@ export function Toolbar({ sidebarCollapsed, onToggleSidebar }: ToolbarProps) {
             </svg>
           )}
         </button>
+        {updateReady && (
+          <button
+            className="toolbar-update-badge"
+            onClick={onInstallUpdate}
+            title="新版本已下载，点击重启更新"
+          >
+            <span className="update-dot" />
+          </button>
+        )}
       </div>
 
       <div className="toolbar-center" data-tauri-drag-region />

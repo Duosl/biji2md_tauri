@@ -115,3 +115,12 @@ export type NavItem = {
   label: string;
   icon: string;
 };
+
+// 自动更新
+export type UpdateInfo = {
+  available: boolean;
+  version?: string;
+  currentVersion: string;
+  body?: string;
+  date?: string;
+};

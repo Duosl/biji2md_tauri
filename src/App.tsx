@@ -8,6 +8,7 @@ import { Toolbar } from "./components/Toolbar";
 import { SyncPage } from "./pages/SyncPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { OnboardingGuide } from "./components/OnboardingGuide";
+import { useUpdater } from "./hooks/useUpdater";
 import type { PageKey, NavItem, Settings } from "./types";
 
 const navItems: NavItem[] = [
@@ -62,6 +63,8 @@ export function App() {
     hasToken: false,
     hasExportDir: false
   });
+  const { state: updateState, installUpdate } = useUpdater();
+  const [appVersion, setAppVersion] = useState("0.0.0");
 
   useEffect(() => {
     async function initApp() {
@@ -75,6 +78,9 @@ export function App() {
         const hasToken = settings.hasToken;
         const hasExportDir = !!settings.defaultOutputDir?.trim();
         setOnboardingState({ hasToken, hasExportDir });
+
+        const version = await invoke<string>("get_app_version");
+        setAppVersion(version);
         if (!hasToken || !hasExportDir) {
           setShowOnboarding(true);
         }
@@ -129,6 +135,8 @@ export function App() {
       <Toolbar
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        updateReady={updateState.status === "ready"}
+        onInstallUpdate={installUpdate}
       />
 
       <div className="app-body">
@@ -148,7 +156,7 @@ export function App() {
             </nav>
 
             <div className="sidebar-footer">
-              <p>v0.1.0</p>
+              <p>v{appVersion}</p>
             </div>
           </aside>
         )}
