@@ -125,7 +125,6 @@ pub struct AppConfig {
     // 导出偏好
     pub export_structure: Option<String>,      // flat, by_month, by_tag
     pub file_name_pattern: Option<String>,     // title_id, date_title_id
-    pub open_output_dir_after_sync: Option<bool>,
     pub show_sync_tips: Option<bool>,
 }
 ```
@@ -232,9 +231,8 @@ npm run build:linux
 ### 阶段 C (P2) - 完成
 - 导出目录结构配置 (flat/by_month/by_tag)
 - 文件名规则配置 (title_id/date_title_id)
-- 同步完成后自动打开目录选项
 - 添加打开导出目录功能
-- 同步完成后快捷操作（打开目录、复制索引路径）
+- 添加打开导出目录按钮
 
 ### 阶段 D (P3) - 完成
 - 设置页改为字段级自动保存（失焦即保存）
@@ -248,3 +246,12 @@ npm run build:linux
 - 工具栏布局改为数据驱动：`--title-bar-height`、`--window-controls-space` 变量
 - 字体栈增加 Ubuntu、Noto Sans、Consolas 支持
 - 平台特定 CSS 规则：macOS (38px, 76px 左侧空间)、Windows (40px, 圆角 4px)、Linux (40px, 圆角 3px)
+
+### 阶段 F (UI 精简) - 完成
+- 移除「最近导出」列表展示，仅保留失败项（RecentExportItem、ExportCollector 删除）
+- 同步结果区模式标签移至标题行，删除索引路径展示和复制按钮
+- 移除「同步完成后自动打开目录」功能（openOutputDirAfterSync 删除）
+- Token 输入改为密码框，支持明文/密文切换，保存后保留值
+- 后端 AppSettings 新增 token 字段返回实际值
+- 设置页清空按钮改为危险色（btn-danger）
+- section-header 布局改为居左

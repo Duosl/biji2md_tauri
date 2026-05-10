@@ -86,9 +86,6 @@ pub fn save_settings(input: SaveSettingsInput) -> Result<AppSettings, String> {
     if let Some(file_name_pattern) = input.file_name_pattern {
         config.file_name_pattern = Some(file_name_pattern);
     }
-    if let Some(open_output_dir_after_sync) = input.open_output_dir_after_sync {
-        config.open_output_dir_after_sync = Some(open_output_dir_after_sync);
-    }
     if let Some(show_sync_tips) = input.show_sync_tips {
         config.show_sync_tips = Some(show_sync_tips);
     }
@@ -126,11 +123,6 @@ pub fn save_setting_field(input: SaveSettingFieldInput) -> Result<AppSettings, S
         "fileNamePattern" => {
             if let Some(val) = input.value.as_str() {
                 config.file_name_pattern = Some(val.to_string());
-            }
-        }
-        "openOutputDirAfterSync" => {
-            if let Some(val) = input.value.as_bool() {
-                config.open_output_dir_after_sync = Some(val);
             }
         }
         "showSyncTips" => {
@@ -472,14 +464,21 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
 }
 
 fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
-    let masked = config
+    let has_token = config
         .token
         .as_deref()
         .filter(|value| !value.trim().is_empty())
-        .map(|value| mask_secret(value, 6, 4));
+        .is_some();
+
+    let masked = if has_token {
+        Some(mask_secret(config.token.as_deref().unwrap_or(""), 6, 4))
+    } else {
+        None
+    };
 
     AppSettings {
-        has_token: masked.is_some(),
+        has_token,
+        token: config.token.clone(),
         token_masked: masked,
         default_output_dir: config.default_output_dir,
         default_page_size: config.default_page_size.unwrap_or(100).max(1),
@@ -493,7 +492,6 @@ fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
         file_name_pattern: config
             .file_name_pattern
             .unwrap_or_else(|| "title_id".to_string()),
-        open_output_dir_after_sync: config.open_output_dir_after_sync.unwrap_or(false),
         show_sync_tips: config.show_sync_tips.unwrap_or(true),
     }
 }

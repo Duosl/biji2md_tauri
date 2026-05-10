@@ -59,7 +59,6 @@ export function useSync() {
     lastMode: "incremental",
     exportStructure: "flat",
     fileNamePattern: "title_id",
-    openOutputDirAfterSync: false,
     showSyncTips: true
   });
   const [snapshot, setSnapshot] = useState<SyncSnapshot>(emptySnapshot);

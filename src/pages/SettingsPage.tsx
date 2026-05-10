@@ -25,6 +25,7 @@ export function SettingsPage() {
     defaultOutputDir: "",
     defaultPageSize: 100,
   });
+  const [showToken, setShowToken] = useState(false);
 
   // 初始化加载
   useEffect(() => {
@@ -114,12 +115,35 @@ export function SettingsPage() {
             )}
             {renderFieldStatus("token")}
           </label>
-          <textarea
-            className="text-field text-area"
-            value={tokenDraft}
-            onChange={(e) => setTokenDraft(e.target.value)}
-            placeholder={settings.tokenMasked ? `已保存: ${settings.tokenMasked}` : "输入 Token"}
-          />
+          <div className="token-input-wrapper">
+            <input
+              type={showToken ? "text" : "password"}
+              className="text-field"
+              value={tokenDraft}
+              onChange={(e) => setTokenDraft(e.target.value)}
+              placeholder="输入 Token"
+            />
+            {tokenDraft && (
+              <button
+                type="button"
+                className="token-toggle-btn"
+                onClick={() => setShowToken((prev) => !prev)}
+                tabIndex={-1}
+              >
+                {showToken ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            )}
+          </div>
           <div className="btn-row">
             <button
               className="btn btn-secondary"
@@ -146,7 +170,7 @@ export function SettingsPage() {
         <h3 className="section-title">导出设置</h3>
         <div className="form-group">
           <label className="form-label">
-            默认导出目录
+            导出目录
             {renderFieldStatus("defaultOutputDir")}
           </label>
           <div className="inline-field">
@@ -252,20 +276,6 @@ export function SettingsPage() {
           </div>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">
-            同步完成后操作
-            {renderFieldStatus("openOutputDirAfterSync")}
-          </label>
-          <label className="checkbox-item">
-            <input
-              type="checkbox"
-              checked={settings.openOutputDirAfterSync}
-              onChange={(e) => saveField("openOutputDirAfterSync", e.target.checked)}
-            />
-            <span>自动打开导出目录</span>
-          </label>
-        </div>
       </section>
     </div>
   );

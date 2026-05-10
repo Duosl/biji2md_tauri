@@ -63,7 +63,6 @@ async fn run_sync_inner(
         config.export_structure.as_deref(),
         config.file_name_pattern.as_deref(),
     )?;
-    let open_output_dir_after_sync = config.open_output_dir_after_sync.unwrap_or(false);
     let previous_last_note_id = index.get_last_note_id();
 
     emit_log(
@@ -437,10 +436,6 @@ async fn run_sync_inner(
             index_path: index.index_path().display().to_string(),
         },
     )?;
-
-    if !cancelled && open_output_dir_after_sync {
-        let _ = open_export_dir_path(std::path::Path::new(&export_dir));
-    }
 
     Ok(())
 }

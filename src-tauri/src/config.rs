@@ -19,8 +19,6 @@ pub struct AppConfig {
     #[serde(default)]
     pub file_name_pattern: Option<String>, // title_id, date_title_id
     #[serde(default)]
-    pub open_output_dir_after_sync: Option<bool>,
-    #[serde(default)]
     pub show_sync_tips: Option<bool>,
 }
 

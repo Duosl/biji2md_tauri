@@ -4,6 +4,7 @@
 
 export type Settings = {
   hasToken: boolean;
+  token?: string | null;
   tokenMasked?: string | null;
   defaultOutputDir?: string | null;
   defaultPageSize: number;
@@ -11,7 +12,6 @@ export type Settings = {
   // 导出偏好设置
   exportStructure: "flat" | "by_month" | "by_tag";
   fileNamePattern: "title_id" | "date_title_id";
-  openOutputDirAfterSync: boolean;
   showSyncTips: boolean;
 };
 

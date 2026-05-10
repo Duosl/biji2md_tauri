@@ -24,7 +24,6 @@ export function useSettings() {
     lastMode: "incremental",
     exportStructure: "flat",
     fileNamePattern: "title_id",
-    openOutputDirAfterSync: false,
     showSyncTips: true
   });
 
@@ -46,6 +45,7 @@ export function useSettings() {
     try {
       const loaded = await invoke<Settings>("get_settings");
       setSettings(loaded);
+      setTokenDraft(loaded.token || "");
       return loaded;
     } catch (error) {
       setSaveError(String(error));
@@ -97,7 +97,7 @@ export function useSettings() {
     }
   }, []);
 
-  // 保存 Token（特殊处理，需要清空草稿）
+  // 保存 Token
   const saveToken = useCallback(async (token: string): Promise<void> => {
     if (!token.trim()) return;
 
@@ -108,7 +108,6 @@ export function useSettings() {
 
     try {
       await saveField("token", token.trim());
-      setTokenDraft(""); // 清空草稿
     } catch (error) {
       setFieldSaveStates(prev => ({
         ...prev,
@@ -174,9 +173,6 @@ export function useSettings() {
       }
       if (input.fileNamePattern !== undefined) {
         promises.push(saveField("fileNamePattern", input.fileNamePattern));
-      }
-      if (input.openOutputDirAfterSync !== undefined) {
-        promises.push(saveField("openOutputDirAfterSync", input.openOutputDirAfterSync));
       }
       if (input.showSyncTips !== undefined) {
         promises.push(saveField("showSyncTips", input.showSyncTips));

@@ -443,6 +443,37 @@ textarea {
   line-height: 1.5;
 }
 
+.token-input-wrapper {
+  position: relative;
+}
+
+.token-input-wrapper .text-field {
+  padding-right: 40px;
+}
+
+.token-toggle-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.token-toggle-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
 .inline-field {
   display: flex;
   gap: 8px;
@@ -485,6 +516,16 @@ textarea {
 
 .btn-secondary:hover:not(:disabled) {
   background: var(--border);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .btn-row {
@@ -552,20 +593,6 @@ textarea {
   font-size: 13px;
   font-weight: 500;
   font-family: var(--font-mono);
-}
-
-.summary-path {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--bg-tertiary);
-  border-radius: 6px;
-}
-
-.summary-path code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-secondary);
-  word-break: break-all;
 }
 
 /* ==========================================================================
@@ -1165,7 +1192,7 @@ textarea {
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -1918,9 +1945,12 @@ textarea {
   text-align: left;
 }
 
-.sync-result-meta {
-  margin-top: 16px;
-  font-size: 13px;
+.sync-mode-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
 }
 

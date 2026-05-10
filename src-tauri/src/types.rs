@@ -125,8 +125,6 @@ pub struct SaveSettingsInput {
     #[serde(default)]
     pub file_name_pattern: Option<String>,
     #[serde(default)]
-    pub open_output_dir_after_sync: Option<bool>,
-    #[serde(default)]
     pub show_sync_tips: Option<bool>,
 }
 
@@ -169,6 +167,7 @@ pub struct SyncCounters {
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub has_token: bool,
+    pub token: Option<String>,
     pub token_masked: Option<String>,
     pub default_output_dir: Option<String>,
     pub default_page_size: u32,
@@ -176,7 +175,6 @@ pub struct AppSettings {
     // 导出偏好设置
     pub export_structure: String,
     pub file_name_pattern: String,
-    pub open_output_dir_after_sync: bool,
     pub show_sync_tips: bool,
 }
 

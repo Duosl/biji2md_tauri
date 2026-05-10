@@ -28,7 +28,6 @@ type DisplaySummary = {
   skipped: number;
   failed: number;
   cancelled: boolean;
-  indexPath?: string | null;
 };
 
 function formatTimestamp(ts?: number | null): string {
@@ -137,8 +136,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
         updated: summary.updated,
         skipped: summary.skipped,
         failed: summary.failed,
-        cancelled: summary.cancelled,
-        indexPath: summary.indexPath || snapshot.indexPath || overview?.indexPath
+        cancelled: summary.cancelled
       }
     : overview?.lastSummary
       ? {
@@ -149,8 +147,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           updated: overview.lastSummary.updated,
           skipped: overview.lastSummary.skipped,
           failed: overview.lastSummary.failed,
-          cancelled: overview.lastSummary.cancelled,
-          indexPath: overview.indexPath
+          cancelled: overview.lastSummary.cancelled
         }
       : null;
 
@@ -330,8 +327,8 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
 
         <div className="mode-hint sync-mode-hint">
           {mode === "incremental"
-            ? "增量适合日常同步；历史编辑较多时再切到全量。"
-            : "全量会重新获取全部笔记，适合修正历史导出或索引。"}
+            ? "增量适合日常同步；在云端修改历史笔记希望同步到本地时可切到全量模式。"
+            : "全量会重新获取全部笔记，会覆盖本地修改过的笔记。请谨慎使用。"}
         </div>
 
         {isRunning && (
@@ -392,6 +389,9 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
         <section className="section sync-panel">
           <div className="section-header">
             <h3>上次同步结果</h3>
+            {resultSummary.mode === "full"
+              ? <span className="sync-mode-tag">全量</span>
+              : <span className="sync-mode-tag">增量</span>}
             <span className="section-count">
               {resultSummary.timestamp ? formatTimestamp(resultSummary.timestamp) : "刚完成"}
             </span>
@@ -420,29 +420,10 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
             </div>
           </div>
 
-          <div className="sync-result-meta">
-            模式: {resultSummary.mode === "full" ? "全量" : "增量"}
-            {resultSummary.cancelled && " · 已取消"}
-          </div>
-
-          {resultSummary.indexPath && (
-            <div className="summary-path">
-              <code>{resultSummary.indexPath}</code>
-            </div>
-          )}
-
           <div className="btn-row sync-result-actions">
             <button className="btn btn-secondary" onClick={() => void openExportDir()}>
               打开导出目录
             </button>
-            {resultSummary.indexPath && (
-              <button
-                className="btn btn-secondary"
-                onClick={() => void navigator.clipboard.writeText(resultSummary.indexPath || "")}
-              >
-                复制索引路径
-              </button>
-            )}
           </div>
         </section>
       )}
