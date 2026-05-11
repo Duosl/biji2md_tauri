@@ -63,7 +63,12 @@ export function App() {
     hasToken: false,
     hasExportDir: false
   });
-  const { state: updateState, installUpdate } = useUpdater();
+  const {
+    state: updateState,
+    checkForUpdates,
+    downloadUpdate,
+    installUpdate,
+  } = useUpdater();
   const [appVersion, setAppVersion] = useState("0.0.0");
 
   useEffect(() => {
@@ -113,7 +118,14 @@ export function App() {
           />
         );
       case "settings":
-        return <SettingsPage />;
+        return (
+          <SettingsPage
+            updateState={updateState}
+            onCheckUpdate={checkForUpdates}
+            onDownloadUpdate={downloadUpdate}
+            onInstallUpdate={installUpdate}
+          />
+        );
       default:
         return <SyncPage onOpenSettings={() => setCurrentPage("settings")} />;
     }

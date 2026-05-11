@@ -5,9 +5,22 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../hooks/useSettings";
-import type { UpdateInfo } from "../types";
+import type { UpdateState } from "../hooks/useUpdater";
+import logoUrl from "../assets/ic_logo.svg";
 
-export function SettingsPage() {
+type SettingsPageProps = {
+  updateState: UpdateState;
+  onCheckUpdate: (silent?: boolean) => Promise<void>;
+  onDownloadUpdate: () => Promise<void>;
+  onInstallUpdate: () => Promise<void>;
+};
+
+export function SettingsPage({
+  updateState,
+  onCheckUpdate,
+  onDownloadUpdate,
+  onInstallUpdate,
+}: SettingsPageProps) {
   const {
     settings,
     loading,
@@ -23,9 +36,6 @@ export function SettingsPage() {
   } = useSettings();
 
   const [appVersion, setAppVersion] = useState("0.0.0");
-  const [updateState, setUpdateState] = useState<"idle" | "checking" | "uptodate" | "available" | "error">("idle");
-  const [updateVersion, setUpdateVersion] = useState<string | undefined>();
-  const [updateError, setUpdateError] = useState<string>("");
 
   // 本地编辑状态（用于输入框）
   const [localValues, setLocalValues] = useState({
@@ -41,29 +51,24 @@ export function SettingsPage() {
   }, []);
 
   const handleCheckUpdate = async () => {
-    setUpdateState("checking");
-    try {
-      const info: UpdateInfo = await invoke("check_update");
-      if (info.available) {
-        setUpdateState("available");
-        setUpdateVersion(info.version);
-      } else {
-        setUpdateState("uptodate");
-      }
-    } catch (e) {
-      const msg = String(e);
-      if (/release\s*json|fetch|404|not\s*found|invalid/i.test(msg)) {
-        setUpdateState("uptodate");
-      } else {
-        setUpdateState("error");
-        setUpdateError(msg);
-      }
-    }
+    console.log("[DEBUG] settings update check request:", {
+      source: "SettingsPage",
+      method: "checkForUpdates",
+      params: { silent: false },
+    });
+    await onCheckUpdate(false);
   };
 
-  const handleInstallUpdate = async () => {
-    await invoke("install_update");
-    window.location.reload();
+  const handleUpdateAction = async () => {
+    console.log("[DEBUG] settings update action request:", {
+      source: "SettingsPage",
+      status: updateState.status,
+    });
+    if (updateState.status === "ready") {
+      await onInstallUpdate();
+      return;
+    }
+    await onDownloadUpdate();
   };
 
   // 同步本地值到设置
@@ -334,63 +339,88 @@ export function SettingsPage() {
 
       {/* 关于与更新 */}
       <section className="section section-meta">
-        <h3 className="section-title">
-          关于
-          <span className="about-version-tag">v{appVersion}</span>
-        </h3>
-        <div className="about-actions">
-          <button
-            className="btn btn-secondary"
-            onClick={handleCheckUpdate}
-            disabled={updateState === "checking"}
-          >
-            {updateState === "checking" ? (
-              <>
-                <svg className="btn-icon-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-                检查中
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
-                  <path d="M23 4v6h-6M1 20v-6h6" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-                检查更新
-              </>
-            )}
-          </button>
-          {updateState === "available" && (
-            <button className="btn btn-primary" onClick={handleInstallUpdate}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+        <div className="about-panel">
+          <div className="about-mark" aria-hidden="true">
+            <img src={logoUrl} alt="" />
+          </div>
+          <div className="about-copy">
+            <div className="about-heading">
+              <h3>biji2md</h3>
+              <span className="about-version-tag">v{appVersion}</span>
+            </div>
+            <div className="about-status" aria-live="polite">
+              {updateState.status === "idle" && (
+                <span className="about-status-item neutral">
+                  <span className="status-dot" />
+                  更新状态待检查
+                </span>
+              )}
+              {updateState.status === "checking" && (
+                <span className="about-status-item checking">
+                  <svg className="btn-icon-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  正在检查更新
+                </span>
+              )}
+              {updateState.status === "downloading" && (
+                <span className="about-status-item checking">
+                  <svg className="btn-icon-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  正在下载{typeof updateState.progress === "number" ? ` ${updateState.progress}%` : ""}
+                </span>
+              )}
+              {updateState.status === "ready" && (
+                <span className="about-status-item success">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12" /></svg>
+                  更新已就绪，重启后生效
+                </span>
+              )}
+              {updateState.status === "uptodate" && (
+                <span className="about-status-item success">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12" /></svg>
+                  已是最新版本
+                </span>
+              )}
+              {updateState.status === "available" && (
+                <span className="about-status-item info">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+                  可更新至 v{updateState.version}
+                </span>
+              )}
+              {updateState.status === "error" && (
+                <span className="about-status-item error" title={updateState.error || "检查失败"}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+                  {(updateState.error?.length ?? 0) > 42 ? updateState.error?.slice(0, 42) + "..." : updateState.error || "检查失败"}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="about-actions">
+            <button
+              className="about-action-btn"
+              onClick={handleCheckUpdate}
+              disabled={updateState.status === "checking" || updateState.status === "downloading" || updateState.status === "ready"}
+              title={updateState.status === "ready" ? "更新已就绪，请重启应用" : "检查更新"}
+            >
+              <svg className={updateState.status === "checking" ? "btn-icon-spin" : ""} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                <path d="M23 4v6h-6M1 20v-6h6" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
               </svg>
-              重启以更新
+              <span>{updateState.status === "checking" ? "检查中" : updateState.status === "ready" ? "已就绪" : "检查"}</span>
             </button>
-          )}
-        </div>
-        <div className="about-status">
-          {updateState === "uptodate" && (
-            <span className="about-status-item success">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12" /></svg>
-              已是最新版本
-            </span>
-          )}
-          {updateState === "available" && (
-            <span className="about-status-item info">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
-              发现新版本 {updateVersion}
-            </span>
-          )}
-          {updateState === "error" && (
-            <span className="about-status-item error">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-              {(updateError?.length ?? 0) > 60 ? updateError.slice(0, 60) + "..." : updateError || "检查失败"}
-            </span>
-          )}
+            {(updateState.status === "available" || updateState.status === "ready") && (
+              <button className="about-action-btn about-action-primary" onClick={handleUpdateAction}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>{updateState.status === "ready" ? "重启" : "下载"}</span>
+              </button>
+            )}
+          </div>
         </div>
       </section>
     </div>

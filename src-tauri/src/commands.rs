@@ -21,10 +21,15 @@ use crate::{
     state::{AppState, RuntimeState},
     sync::run_sync,
     types::{
-        mask_secret, AppSettings, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput, StartSyncRequest,
-        SyncLogEvent, SyncOverview, SyncSnapshot, SyncStatus, UpdateInfo,
+        mask_secret, AppSettings, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput,
+        StartSyncRequest, SyncLogEvent, SyncOverview, SyncSnapshot, SyncStatus, UpdateInfo,
     },
 };
+
+const FALLBACK_UPDATE_ENDPOINTS: &[&str] = &[
+    "https://github.com/Duosl/biji2md_tauri/releases/latest/download/latest.json",
+    "https://kkgithub.com/https://github.com/Duosl/biji2md_tauri/releases/latest/download/latest.json",
+];
 
 #[tauri::command]
 pub fn get_platform_info() -> PlatformInfo {
@@ -109,7 +114,11 @@ pub fn save_setting_field(input: SaveSettingFieldInput) -> Result<AppSettings, S
         }
         "defaultOutputDir" => {
             if let Some(dir) = input.value.as_str() {
-                config.default_output_dir = if dir.is_empty() { None } else { Some(dir.to_string()) };
+                config.default_output_dir = if dir.is_empty() {
+                    None
+                } else {
+                    Some(dir.to_string())
+                };
             }
         }
         "defaultPageSize" => {
@@ -467,27 +476,123 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
 
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> Result<UpdateInfo, String> {
-    let updater = app
-        .updater()
-        .map_err(|e| format!("updater not available: {e}"))?;
+    let current_version = app.package_info().version.to_string();
+    let endpoints = update_endpoints();
+    eprintln!(
+        "[DEBUG] check_update request params: currentVersion={}, os={}, arch={}, endpoints={:?}",
+        current_version,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        endpoints
+    );
+    log_update_endpoint_responses(&endpoints).await;
+
+    let updater = app.updater().map_err(|e| {
+        eprintln!("[DEBUG] updater not available: {e}");
+        format!("updater not available: {e}")
+    })?;
+
+    eprintln!("[DEBUG] updater created, checking for updates...");
 
     match updater.check().await {
-        Ok(Some(update)) => Ok(UpdateInfo {
-            available: true,
-            version: Some(update.version.clone()),
-            current_version: app.package_info().version.to_string(),
-            body: update.body.clone(),
-            date: update.date.map(|d| d.to_string()),
-        }),
-        Ok(None) => Ok(UpdateInfo {
-            available: false,
-            version: None,
-            current_version: app.package_info().version.to_string(),
-            body: None,
-            date: None,
-        }),
-        Err(e) => Err(format!("check update failed: {e}")),
+        Ok(Some(update)) => {
+            let info = UpdateInfo {
+                available: true,
+                version: Some(update.version.clone()),
+                current_version,
+                body: update.body.clone(),
+                date: update.date.map(|d| d.to_string()),
+            };
+            eprintln!("[DEBUG] check_update response: {:?}", info);
+            Ok(info)
+        }
+        Ok(None) => {
+            let info = UpdateInfo {
+                available: false,
+                version: None,
+                current_version,
+                body: None,
+                date: None,
+            };
+            eprintln!("[DEBUG] check_update response: {:?}", info);
+            Ok(info)
+        }
+        Err(e) => {
+            eprintln!("[DEBUG] check_update response error: {e}");
+            Err(format!("check update failed: {e}"))
+        }
     }
+}
+
+fn update_endpoints() -> Vec<String> {
+    let config = include_str!("../tauri.conf.json");
+    let parsed = serde_json::from_str::<serde_json::Value>(config)
+        .ok()
+        .and_then(|value| {
+            value
+                .pointer("/plugins/updater/endpoints")
+                .and_then(|endpoints| endpoints.as_array())
+                .map(|endpoints| {
+                    endpoints
+                        .iter()
+                        .filter_map(|endpoint| endpoint.as_str().map(ToString::to_string))
+                        .collect::<Vec<_>>()
+                })
+        })
+        .filter(|endpoints| !endpoints.is_empty());
+
+    parsed.unwrap_or_else(|| {
+        FALLBACK_UPDATE_ENDPOINTS
+            .iter()
+            .map(|endpoint| endpoint.to_string())
+            .collect()
+    })
+}
+
+async fn log_update_endpoint_responses(endpoints: &[String]) {
+    let client = reqwest::Client::new();
+
+    for endpoint in endpoints {
+        eprintln!("[DEBUG] update endpoint request: method=GET url={endpoint}");
+
+        match client.get(endpoint).send().await {
+            Ok(response) => {
+                let status = response.status();
+                let final_url = response.url().to_string();
+
+                match response.text().await {
+                    Ok(body) => {
+                        eprintln!(
+                            "[DEBUG] update endpoint response: status={} finalUrl={} body={}",
+                            status,
+                            final_url,
+                            truncate_debug_body(&body, 2000)
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[DEBUG] update endpoint response read failed: status={} finalUrl={} error={}",
+                            status, final_url, e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "[DEBUG] update endpoint request failed: url={} error={}",
+                    endpoint, e
+                );
+            }
+        }
+    }
+}
+
+fn truncate_debug_body(body: &str, max_chars: usize) -> String {
+    let mut truncated: String = body.chars().take(max_chars).collect();
+    if body.chars().count() > max_chars {
+        truncated.push_str("...");
+    }
+    truncated
 }
 
 #[tauri::command]
@@ -503,10 +608,7 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
         .ok_or_else(|| "no update available".to_string())?;
 
     update
-        .download_and_install(
-            |_chunk: usize, _content_length: Option<u64>| {},
-            || {},
-        )
+        .download_and_install(|_chunk: usize, _content_length: Option<u64>| {}, || {})
         .await
         .map_err(|e| format!("install failed: {e}"))?;
 
@@ -519,7 +621,10 @@ pub fn get_app_version(app: AppHandle) -> String {
 }
 
 #[tauri::command]
-pub fn get_sync_logs(export_dir: String, limit: Option<usize>) -> Result<Vec<SyncLogEvent>, String> {
+pub fn get_sync_logs(
+    export_dir: String,
+    limit: Option<usize>,
+) -> Result<Vec<SyncLogEvent>, String> {
     let log_manager = SyncLog::open(&export_dir)?;
     log_manager.read_recent(limit.unwrap_or(500))
 }

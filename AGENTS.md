@@ -30,8 +30,7 @@ biji2md/
 │   │   └── SettingsPage.tsx     # 设置页面
 │   └── components/
 │       ├── Toolbar.tsx          # 工具栏组件
-│       ├── OnboardingGuide.tsx  # 新手引导组件
-│       └── UpdateNotification.tsx  # 更新通知 Toast 组件
+│       └── OnboardingGuide.tsx  # 新手引导组件
 ├── src-tauri/                   # Rust 后端
 │   ├── keys/                    # 签名密钥（公钥提交，私钥本地）
 │   │   └── biji2md.key.pub      # Tauri 更新签名公钥
@@ -79,9 +78,9 @@ biji2md/
 |------|------|
 | useSync.ts | 同步状态管理、事件监听、错误捕获、历史日志加载 |
 | useSettings.ts | 设置加载/保存、脏状态检测 |
-| useUpdater.ts | 自动更新检测、静默下载、安装重启 |
+| useUpdater.ts | 自动更新检测、单一下载状态、下载完成后重启 |
 | SyncPage.tsx | 同步界面、状态展示 |
-| SettingsPage.tsx | 设置界面、配置编辑 |
+| SettingsPage.tsx | 设置界面、配置编辑、关于与更新面板 |
 
 ---
 
@@ -137,8 +136,8 @@ pub struct AppConfig {
     pub default_page_size: Option<u32>,
     pub last_mode: Option<String>,
     // 导出偏好
-    pub export_structure: Option<String>,      // flat, by_month, by_tag
-    pub file_name_pattern: Option<String>,     // title_id, date_title_id
+    pub export_structure: Option<String>,      // flat, by_month, by_tag, by_topic
+    pub file_name_pattern: Option<String>,     // title, title_id, date_title_id
     pub show_sync_tips: Option<bool>,
 }
 ```
@@ -179,6 +178,8 @@ pub struct SyncOverview {
 | install_update() | 下载并安装更新 |
 | get_app_version() | 获取当前应用版本号 |
 | get_sync_logs(export_dir, limit) | 从 sync.log 加载历史日志 |
+
+> 前端更新入口以 `useUpdater` 为主：启动后静默检查并下载，设置页复用同一份更新状态；下载完成后 Toolbar 和设置页只触发 `relaunch()`，避免重复下载。`process:allow-restart` 必须保留在 capability 中。
 
 ---
 
@@ -278,10 +279,9 @@ npm run build:linux
 - 新增 Tauri Updater 插件集成（tauri-plugin-updater + tauri-plugin-process）
 - 后端新增 `check_update`、`install_update`、`get_app_version` 三个命令
 - 前端 `useUpdater` Hook：启动时 + 每 24 小时静默检测，默认静默下载
-- 新增 `UpdateNotification` 底部浮动 Toast 组件（深色风格，与 app 设计语言一致）
 - 设置页添加版本信息展示和"检查更新"按钮
 - GitHub Actions Release 工作流升级：生成签名、updater 格式、latest.json
-- endpoints 配置 kkgithub (主) + GitHub (备) 双源 fallback
+- endpoints 配置 GitHub (主) + kkgithub (备) 双源 fallback
 - 签名密钥对已生成（公钥提交仓库，私钥需配置 GitHub Secrets）
 
 ### 阶段 H (日志持久化 & 同步体验) - 完成
@@ -299,3 +299,12 @@ npm run build:linux
 - "打开导出目录"按钮移至操作区，同步结果区不再重复
 - 设置页新增"关于"区域：版本号展示 + 检查更新按钮 + 更新状态
 - App 集成 `useUpdater`，Toolbar 显示更新徽标，侧栏版本号动态获取
+
+### 阶段 I (0.3.0 发布准备) - 完成
+- 版本号统一升级到 `0.3.0`（package、Cargo、Tauri 配置与锁文件）
+- 自动更新状态统一到 App 顶层 `useUpdater`，设置页和 Toolbar 共享检查、下载、重启状态
+- 更新下载完成后 Toolbar 显示「重启更新」胶囊按钮，设置页显示就绪状态和重启按钮
+- capability 新增 `process:allow-restart`，确保正式包可调用 `relaunch()`
+- 设置页「关于」区域改为品牌信息面板，使用 `ic_logo.svg` 并展示下载/就绪/错误状态
+- 移除 Toolbar 左侧拖拽区域，避免标题栏按钮被 `data-tauri-drag-region` 吃掉点击
+- 更新检查日志增加 endpoint、请求参数、HTTP 状态与响应摘要，便于诊断私有仓库、404、签名等问题

@@ -56,8 +56,18 @@ async fn run_sync_inner(
     let log_manager = SyncLog::open(&export_dir)?;
     log_manager.trim_if_needed()?;
 
-    emit_log(app, &log_manager, "info", &format!("同步模式：{}", mode.as_str()))?;
-    emit_log(app, &log_manager, "info", &format!("输出目录：{export_dir}"))?;
+    emit_log(
+        app,
+        &log_manager,
+        "info",
+        &format!("同步模式：{}", mode.as_str()),
+    )?;
+    emit_log(
+        app,
+        &log_manager,
+        "info",
+        &format!("输出目录：{export_dir}"),
+    )?;
     let config = load_config()?;
     let client = ApiClient::new(&token)?;
     let mut index = IndexManager::load(&export_dir)?;
@@ -81,7 +91,12 @@ async fn run_sync_inner(
                 )?;
             }
             None => {
-                emit_log(app, &log_manager, "info", "增量模式：将按时间顺序获取全部笔记（首次同步）。")?;
+                emit_log(
+                    app,
+                    &log_manager,
+                    "info",
+                    "增量模式：将按时间顺序获取全部笔记（首次同步）。",
+                )?;
             }
         }
     }
@@ -582,7 +597,20 @@ pub fn format_timestamp(ts_ms: u64) -> String {
     }
 
     let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-    let mdays = [31, if is_leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mdays = [
+        31,
+        if is_leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut month = 1_u32;
     let mut day = rem + 1;
     for (_i, &d) in mdays.iter().enumerate() {

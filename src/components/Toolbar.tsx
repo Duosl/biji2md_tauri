@@ -24,7 +24,7 @@ export function Toolbar({ sidebarCollapsed, onToggleSidebar, updateReady, onInst
 
   return (
     <div className="toolbar">
-      <div className="toolbar-left" data-tauri-drag-region>
+      <div className="toolbar-left">
         <button
           className="toolbar-btn"
           onClick={onToggleSidebar}
@@ -44,11 +44,17 @@ export function Toolbar({ sidebarCollapsed, onToggleSidebar, updateReady, onInst
         </button>
         {updateReady && (
           <button
-            className="toolbar-update-badge"
+            className="toolbar-update-action"
             onClick={onInstallUpdate}
             title="新版本已下载，点击重启更新"
           >
-            <span className="update-dot" />
+            <span className="update-dot" aria-hidden="true" />
+            <svg {...iconProps} width={14} height={14}>
+              <path d="M13.25 9.25v2.25a1.75 1.75 0 0 1-1.75 1.75h-7a1.75 1.75 0 0 1-1.75-1.75V9.25" />
+              <path d="M5 6.25 8 9.25l3-3" />
+              <path d="M8 9.25v-7.5" />
+            </svg>
+            <span>重启更新</span>
           </button>
         )}
       </div>

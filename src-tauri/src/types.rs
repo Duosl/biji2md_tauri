@@ -315,9 +315,9 @@ pub struct SyncOverview {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformInfo {
-    pub platform: String,         // macos, windows, linux
-    pub title_bar_height: u32,    // 平台默认标题栏高度
-    pub has_traffic_lights: bool, // macOS 红黄绿按钮
+    pub platform: String,                 // macos, windows, linux
+    pub title_bar_height: u32,            // 平台默认标题栏高度
+    pub has_traffic_lights: bool,         // macOS 红黄绿按钮
     pub window_controls_position: String, // left 或 right
 }
 
