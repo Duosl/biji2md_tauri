@@ -182,7 +182,7 @@ fn note_tag_dir(note: &Note) -> String {
         .iter()
         .map(|tag| sanitize_component(tag.name.trim()))
         .find(|value| !value.is_empty())
-        .unwrap_or_else(|| "untagged".to_string())
+        .unwrap_or_else(|| "无标签".to_string())
 }
 
 fn note_topic_dir(note: &Note) -> String {
@@ -190,13 +190,13 @@ fn note_topic_dir(note: &Note) -> String {
         .iter()
         .map(|topic| sanitize_component(topic.topic_name.trim()))
         .find(|value| !value.is_empty())
-        .unwrap_or_else(|| "no-topic".to_string())
+        .unwrap_or_else(|| "0未加入知识库".to_string())
 }
 
 fn note_date_prefix(note: &Note) -> String {
     extract_date(&note.created_at)
         .or_else(|| extract_date(&note.edit_time))
-        .unwrap_or_else(|| "unknown-date".to_string())
+        .unwrap_or_else(|| "".to_string())
 }
 
 fn extract_year_month(value: &str) -> Option<String> {
