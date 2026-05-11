@@ -54,7 +54,8 @@ jobs:
             if (fs.existsSync(changelogPath)) {
               const changelog = fs.readFileSync(changelogPath, 'utf8').replace(/\r\n/g, '\n');
               const escapedTag = escapeRegExp(tag);
-              const headingPattern = new RegExp(`^##\\s+\[?${escapedTag}\]?\\s*(?:-.*)?$`, 'm');
+              // 支持 [v0.2.0] 和 v0.2.0 两种标题格式
+              const headingPattern = new RegExp('^##\\s+\\[' + escapedTag + '\\]\\s*(?:-.*)?$|^##\\s+' + escapedTag + '\\s*(?:-.*)?$', 'm');
 
               console.log('[DEBUG] tag:', tag);
               console.log('[DEBUG] escapedTag:', escapedTag);
@@ -396,27 +397,30 @@ jobs:
           fi
           
           # Generate latest.json
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          REPO="${{ github.repository }}"
+
           cat > latest.json << EOF
-          {
-            "version": "${VERSION}",
-            "notes": "${NOTES}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "darwin-aarch64": {
-                "signature": "${DARWIN_AARCH64_SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${TAG}/biji2md_${VERSION}_macos_apple-silicon.app.tar.gz"
-              },
-              "darwin-x86_64": {
-                "signature": "${DARWIN_X86_64_SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${TAG}/biji2md_${VERSION}_macos_intel.app.tar.gz"
-              },
-              "windows-x86_64": {
-                "signature": "${WINDOWS_X86_64_SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${TAG}/biji2md_${VERSION}_windows_x64.nsis.zip"
-              }
-            }
-          }
-          EOF
+{
+  "version": "${VERSION}",
+  "notes": "${NOTES}",
+  "pub_date": "${PUB_DATE}",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "${DARWIN_AARCH64_SIG}",
+      "url": "https://github.com/${REPO}/releases/download/${TAG}/biji2md_${VERSION}_macos_apple-silicon.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "${DARWIN_X86_64_SIG}",
+      "url": "https://github.com/${REPO}/releases/download/${TAG}/biji2md_${VERSION}_macos_intel.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "${WINDOWS_X86_64_SIG}",
+      "url": "https://github.com/${REPO}/releases/download/${TAG}/biji2md_${VERSION}_windows_x64.nsis.zip"
+    }
+  }
+}
+EOF
           
           cat latest.json
 
@@ -437,10 +441,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          git fetch origin main
+          git checkout -B sync-version-$VERSION origin/main
+
           jq ".version = \"$VERSION\"" package.json > package.json.tmp && mv package.json.tmp package.json
           sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
           git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
           git commit -m "chore: update version to v${VERSION}"
-          git push
+          git push origin sync-version-$VERSION
