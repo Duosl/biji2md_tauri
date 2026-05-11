@@ -115,6 +115,7 @@ jobs:
         run: |
           jq ".version = \"$VERSION\"" package.json > package.json.tmp && mv package.json.tmp package.json
           sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          sed -i '' "/^name = \"biji2md\"$/,/^version/s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.lock
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
           echo "Synced version to $VERSION"
 
@@ -200,6 +201,11 @@ jobs:
           $cargoVer = "version = ""$v"""
           (Get-Content src-tauri/Cargo.toml) -replace '^version = "[^"]*"', $cargoVer | Set-Content src-tauri/Cargo.toml -Encoding UTF8
 
+          # Update Cargo.lock: version line after name = "biji2md"
+          $lockContent = Get-Content src-tauri/Cargo.lock -Raw
+          $lockContent = $lockContent -replace '(?m)(?<=name = "biji2md"\r?\n)version = "[^"]*"', "version = ""$v"""
+          Set-Content src-tauri/Cargo.lock -Value $lockContent -Encoding UTF8
+
           jq $jqFilter src-tauri/tauri.conf.json | Set-Content src-tauri/tauri.conf.json -Encoding UTF8
           Write-Host "Synced version to $v"
 
@@ -268,6 +274,7 @@ jobs:
         run: |
           jq ".version = \"$VERSION\"" package.json > package.json.tmp && mv package.json.tmp package.json
           sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          sed -i "/^name = \"biji2md\"$/,/^version/s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.lock
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
           echo "Synced version to $VERSION"
 
@@ -453,8 +460,9 @@ jobs:
 
           jq ".version = \"$VERSION\"" package.json > package.json.tmp && mv package.json.tmp package.json
           sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          sed -i "/^name = \"biji2md\"$/,/^version/s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.lock
           jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
-          git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+          git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
           git commit -m "chore: update version to v${VERSION}"
-          git push origin sync-version-$VERSION
+          git push origin sync-version-$VERSION:main
