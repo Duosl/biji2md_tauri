@@ -400,27 +400,34 @@ jobs:
           PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           REPO="${{ github.repository }}"
 
-          cat > latest.json << EOF
-{
-  "version": "${VERSION}",
-  "notes": "${NOTES}",
-  "pub_date": "${PUB_DATE}",
-  "platforms": {
-    "darwin-aarch64": {
-      "signature": "${DARWIN_AARCH64_SIG}",
-      "url": "https://github.com/${REPO}/releases/download/${TAG}/biji2md_${VERSION}_macos_apple-silicon.app.tar.gz"
-    },
-    "darwin-x86_64": {
-      "signature": "${DARWIN_X86_64_SIG}",
-      "url": "https://github.com/${REPO}/releases/download/${TAG}/biji2md_${VERSION}_macos_intel.app.tar.gz"
-    },
-    "windows-x86_64": {
-      "signature": "${WINDOWS_X86_64_SIG}",
-      "url": "https://github.com/${REPO}/releases/download/${TAG}/biji2md_${VERSION}_windows_x64.nsis.zip"
-    }
-  }
-}
-EOF
+          jq -n \
+            --arg version "${VERSION}" \
+            --arg notes "${NOTES}" \
+            --arg pub_date "${PUB_DATE}" \
+            --arg darwin_aarch64_sig "${DARWIN_AARCH64_SIG}" \
+            --arg darwin_x86_64_sig "${DARWIN_X86_64_SIG}" \
+            --arg windows_x86_64_sig "${WINDOWS_X86_64_SIG}" \
+            --arg repo "${REPO}" \
+            --arg tag "${TAG}" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": {
+                  signature: $darwin_aarch64_sig,
+                  url: "https://github.com/\($repo)/releases/download/\($tag)/biji2md_\($version)_macos_apple-silicon.app.tar.gz"
+                },
+                "darwin-x86_64": {
+                  signature: $darwin_x86_64_sig,
+                  url: "https://github.com/\($repo)/releases/download/\($tag)/biji2md_\($version)_macos_intel.app.tar.gz"
+                },
+                "windows-x86_64": {
+                  signature: $windows_x86_64_sig,
+                  url: "https://github.com/\($repo)/releases/download/\($tag)/biji2md_\($version)_windows_x64.nsis.zip"
+                }
+              }
+            }' > latest.json
           
           cat latest.json
 
