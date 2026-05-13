@@ -161,8 +161,23 @@ impl Exporter {
         }
     }
 
-    if note.parent_id.is_some() {
-        body.push_str("\n\n---\n↑ 返回父笔记\n");
+    if let (Some(ref parent_title), Some(ref parent_id)) = (&note.parent_title, &note.parent_id) {
+        let parent = Note {
+            id: parent_id.clone(),
+            title: parent_title.clone(),
+            content: String::new(),
+            prime_id: None,
+            parent_id: None,
+            parent_title: None,
+            tags: Vec::new(),
+            topics: Vec::new(),
+            edit_time: String::new(),
+            created_at: note.created_at.clone(),
+            sub_note_count: 0,
+            sub_notes: Vec::new(),
+        };
+        let parent_file = note_file_name(&parent, self.file_name_pattern);
+        body.push_str(&format!("\n\n---\n[[{}]]\n", parent_file));
     }
 
     format!("---\n{frontmatter}\n---\n\n{body}\n")

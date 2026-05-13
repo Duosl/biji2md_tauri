@@ -56,6 +56,8 @@ pub struct Note {
     #[serde(default)]
     pub parent_id: Option<String>,
     #[serde(default)]
+    pub parent_title: Option<String>,
+    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub content: String,

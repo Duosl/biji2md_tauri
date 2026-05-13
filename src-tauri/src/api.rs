@@ -182,6 +182,7 @@ fn note_from_value(value: &Value) -> Option<Note> {
         id,
         prime_id,
         parent_id,
+        parent_title: None,
         title,
         content,
         tags,

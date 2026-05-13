@@ -208,7 +208,10 @@ async fn run_sync_inner(
             if note.sub_note_count > 0 {
                 if let Some(ref prime_id) = note.prime_id {
                     match client.get_note_children(prime_id, note.sub_note_count as usize).await {
-                        Ok(children) => {
+                        Ok(mut children) => {
+                            for child in &mut children {
+                                child.parent_title = Some(note.title.clone());
+                            }
                             note.sub_notes = children;
                             emit_log(
                                 app,

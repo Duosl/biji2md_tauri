@@ -69,7 +69,7 @@ jobs:
               if (heading) {
                 const sectionStart = heading.index + heading[0].length;
                 const sectionRest = changelog.slice(sectionStart);
-                const nextSectionIndex = sectionRest.search(/^##\\s+/m);
+                const nextSectionIndex = sectionRest.search(new RegExp('^##\\s+', 'm'));
                 body = sectionRest
                   .slice(0, nextSectionIndex === -1 ? undefined : nextSectionIndex)
                   .trim();
