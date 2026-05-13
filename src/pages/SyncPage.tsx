@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { useSync } from "../hooks/useSync";
 
 const LOG_FILTERS = [
-  { key: "all", label: "全部" },
-  { key: "error", label: "仅错误" },
-  { key: "key", label: "关键节点" }
+  { key: "key", label: "关键节点" },
+  { key: "error", label: "错误" },
+  { key: "all", label: "全部日志" }
 ] as const;
 
 type SyncPageProps = {
@@ -93,7 +93,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
   } = useSync();
 
   const [statusText, setStatusText] = useState("准备就绪");
-  const [logFilter, setLogFilter] = useState<LogFilterKey>("all");
+  const [logFilter, setLogFilter] = useState<LogFilterKey>("key");
   const [showLogs, setShowLogs] = useState(false);
   const userCollapsedRef = useRef(false);
 

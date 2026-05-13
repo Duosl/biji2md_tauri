@@ -281,7 +281,7 @@ export function SettingsPage({
                 checked={settings.exportStructure === "by_tag"}
                 onChange={(e) => saveField("exportStructure", e.target.value)}
               />
-              <span>按标签分组</span>
+              <span>按主标签分组</span>
             </label>
             <label className="radio-item">
               <input

@@ -211,6 +211,7 @@ async fn run_sync_inner(
                         Ok(mut children) => {
                             for child in &mut children {
                                 child.parent_title = Some(note.title.clone());
+                                child.topics = note.topics.clone();
                             }
                             note.sub_notes = children;
                             emit_log(

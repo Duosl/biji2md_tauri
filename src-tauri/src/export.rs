@@ -94,7 +94,7 @@ impl Exporter {
 
 impl ExportStructure {
     fn from_optional(value: Option<&str>) -> Self {
-        match value.unwrap_or("flat") {
+        match value.unwrap_or("by_topic") {
             "by_month" => Self::ByMonth,
             "by_tag" => Self::ByTag,
             "by_topic" => Self::ByTopic,
@@ -105,7 +105,7 @@ impl ExportStructure {
 
 impl FileNamePattern {
     fn from_optional(value: Option<&str>) -> Self {
-        match value.unwrap_or("title_id") {
+        match value.unwrap_or("title") {
             "title" => Self::Title,
             "date_title_id" => Self::DateTitleId,
             _ => Self::TitleId,
