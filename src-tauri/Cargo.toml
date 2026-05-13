@@ -1,6 +1,6 @@
 [package]
 name = "biji2md"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Batch export notes to Markdown with Tauri"
 
