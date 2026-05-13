@@ -75,6 +75,44 @@ impl ApiClient {
             total_items: extract_total_items(&value),
         })
     }
+
+    pub async fn get_note_children(
+        &self,
+        prime_id: &str,
+        limit: usize,
+    ) -> Result<Vec<Note>, String> {
+        let url = format!(
+            "{BASE_URL}{NOTES_ENDPOINT}/{prime_id}/children"
+        );
+        let response = self
+            .client
+            .get(url)
+            .bearer_auth(&self.token)
+            .query(&[("limit", limit.to_string()), ("sort", "edit_desc".to_string())])
+            .send()
+            .await
+            .map_err(|error| format!("failed to request note children: {error}"))?;
+
+        let status = response.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            return Err("鉴权失败，请检查 API Token 是否正确。".to_string());
+        }
+
+        if !status.is_success() {
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unable to read response body".to_string());
+            return Err(format!("note children api returned {status}: {body}"));
+        }
+
+        let value: Value = response
+            .json()
+            .await
+            .map_err(|error| format!("failed to decode children response: {error}"))?;
+
+        Ok(extract_notes(&value))
+    }
 }
 
 fn extract_notes(value: &Value) -> Vec<Note> {
@@ -130,17 +168,28 @@ fn note_from_value(value: &Value) -> Option<Note> {
         &["created_at", "createdAt", "create_time", "created"],
     )
     .unwrap_or_default();
+    let prime_id = string_field(value, &["prime_id", "primeId"]);
+    let parent_id = string_field(value, &["parent_id", "parentId"]);
+    let sub_note_count = value
+        .get("sub_note_count")
+        .or_else(|| value.get("subNoteCount"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
     let tags = parse_tags(value.get("tags").or_else(|| value.get("tag_list")));
     let topics = parse_topics(value.get("topics"));
 
     Some(Note {
         id,
+        prime_id,
+        parent_id,
         title,
         content,
         tags,
         topics,
         edit_time,
         created_at,
+        sub_note_count,
+        sub_notes: Vec::new(),
     })
 }
 

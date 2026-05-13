@@ -66,7 +66,7 @@ impl Exporter {
     ) -> Result<String, String> {
         let relative_path = self.preview_relative_path(note);
         let file_path = self.export_dir.join(&relative_path);
-        let content = render_note(note);
+        let content = self.render_note(note);
 
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)
@@ -113,7 +113,8 @@ impl FileNamePattern {
     }
 }
 
-fn render_note(note: &Note) -> String {
+impl Exporter {
+    pub fn render_note(&self, note: &Note) -> String {
     let tags = note
         .tags
         .iter()
@@ -136,16 +137,36 @@ fn render_note(note: &Note) -> String {
 
     let normalized_content = note.content.replace("\r\n", "\n");
 
-    format!(
-        "---\ntitle: {}\nnote_id: {}\ntags: [{}]\ntopics: [{}]\ncreated_at: {}\nupdated_at: {}\n---\n\n{}\n",
+    let mut frontmatter = format!(
+        "title: {}\nnote_id: {}\ntags: [{}]\ntopics: [{}]\ncreated_at: {}\nupdated_at: {}",
         yaml_string(title),
         yaml_string(&note.id),
         tags,
         topics,
         yaml_string(&note.created_at),
-        yaml_string(&note.edit_time),
-        normalized_content
-    )
+        yaml_string(&note.edit_time)
+    );
+
+    if let Some(ref parent_id) = note.parent_id {
+        frontmatter.push_str(&format!("\nparent_id: {}", yaml_string(parent_id)));
+    }
+
+    let mut body = normalized_content;
+
+    if !note.sub_notes.is_empty() {
+        body.push_str("\n\n## 子笔记\n");
+        for child in &note.sub_notes {
+            let child_file = note_file_name(child, self.file_name_pattern);
+            body.push_str(&format!("- [[{}]]\n", child_file));
+        }
+    }
+
+    if note.parent_id.is_some() {
+        body.push_str("\n\n---\n↑ 返回父笔记\n");
+    }
+
+    format!("---\n{frontmatter}\n---\n\n{body}\n")
+    }
 }
 
 fn note_file_name(note: &Note, pattern: FileNamePattern) -> String {

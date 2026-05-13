@@ -52,6 +52,10 @@ pub struct Note {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
+    pub prime_id: Option<String>,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub content: String,
@@ -63,6 +67,10 @@ pub struct Note {
     pub edit_time: String,
     #[serde(default)]
     pub created_at: String,
+    #[serde(default)]
+    pub sub_note_count: u32,
+    #[serde(default)]
+    pub sub_notes: Vec<Note>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -18,7 +18,7 @@ use crate::{
     log::SyncLog,
     state::RuntimeState,
     types::{
-        StartSyncRequest, SyncCompletedEvent, SyncCounters, SyncItemEvent, SyncLogEvent, SyncMode,
+        Note, StartSyncRequest, SyncCompletedEvent, SyncCounters, SyncItemEvent, SyncLogEvent, SyncMode,
         SyncPageEvent, SyncSnapshot, SyncStatus,
     },
 };
@@ -170,9 +170,10 @@ async fn run_sync_inner(
         }
 
         counters.total += page.notes.len() as u32;
+        let page_notes_len = page.notes.len() as u32;
         update_snapshot(state, |snapshot| {
             snapshot.current_page = Some(page_num);
-            snapshot.page_notes = Some(page.notes.len() as u32);
+            snapshot.page_notes = Some(page_notes_len);
             snapshot.total_fetched = counters.total;
             snapshot.total_expected = total_expected;
             snapshot.current_message =
@@ -195,18 +196,66 @@ async fn run_sync_inner(
         let mut page_updated = 0_u32;
         let mut page_skipped = 0_u32;
         let mut page_failed = 0_u32;
+        let mut last_page_note_id: Option<String> = None;
 
-        for (page_index, note) in page.notes.iter().enumerate() {
+        for (page_index, mut note) in page.notes.into_iter().enumerate() {
+            last_page_note_id = Some(note.id.clone());
             if is_cancelled(&cancel_flag) {
                 cancelled = true;
                 break;
+            }
+
+            if note.sub_note_count > 0 {
+                if let Some(ref prime_id) = note.prime_id {
+                    match client.get_note_children(prime_id, note.sub_note_count as usize).await {
+                        Ok(children) => {
+                            note.sub_notes = children;
+                            emit_log(
+                                app,
+                                &log_manager,
+                                "info",
+                                &format!(
+                                    "[子笔记] {} ({}) 拉取到 {} 条子笔记",
+                                    display_title(&note),
+                                    note.id,
+                                    note.sub_notes.len()
+                                ),
+                            )?;
+                        }
+                        Err(err) => {
+                            emit_log(
+                                app,
+                                &log_manager,
+                                "warn",
+                                &format!(
+                                    "[子笔记] {} ({}) 子笔记拉取失败：{}",
+                                    display_title(&note),
+                                    note.id,
+                                    err
+                                ),
+                            )?;
+                        }
+                    }
+                } else {
+                    emit_log(
+                        app,
+                        &log_manager,
+                        "warn",
+                        &format!(
+                            "[子笔记] {} ({}) sub_note_count={} 但缺少 prime_id，跳过子笔记拉取",
+                            display_title(&note),
+                            note.id,
+                            note.sub_note_count
+                        ),
+                    )?;
+                }
             }
 
             processed_count += 1;
             update_snapshot(state, |snapshot| {
                 snapshot.processed_count = processed_count;
                 snapshot.current_page = Some(page_num);
-                snapshot.page_notes = Some(page.notes.len() as u32);
+                snapshot.page_notes = Some(page_notes_len);
             });
 
             let now = now_millis();
@@ -216,8 +265,8 @@ async fn run_sync_inner(
             }
 
             let previous_file_path = index.get_file_path(&note.id).map(str::to_string);
-            let next_file_path = exporter.preview_relative_path(note);
-            let needs_export = index.should_update_note(note)
+            let next_file_path = exporter.preview_relative_path(&note);
+            let needs_export = index.should_update_note(&note)
                 || previous_file_path.as_deref() != Some(next_file_path.as_str());
 
             if !needs_export {
@@ -258,23 +307,19 @@ async fn run_sync_inner(
                         .map(|value| format!("/{value}"))
                         .unwrap_or_default(),
                     page_index + 1,
-                    page.notes.len(),
+                    page_notes_len,
                     if action == "created" {
                         "新增导出"
                     } else {
                         "更新导出"
                     },
-                    if note.title.trim().is_empty() {
-                        note.id.as_str()
-                    } else {
-                        note.title.as_str()
-                    }
+                    display_title(&note)
                 ),
             )?;
 
-            match exporter.export_note(note, previous_file_path.as_deref()) {
+            match exporter.export_note(&note, previous_file_path.as_deref()) {
                 Ok(file_name) => {
-                    index.update_note_entry(note, file_name.clone());
+                    index.update_note_entry(&note, file_name.clone());
 
                     if action == "created" {
                         counters.created += 1;
@@ -302,6 +347,76 @@ async fn run_sync_inner(
                             error: None,
                         },
                     )?;
+
+                    for (sub_index, sub_note) in note.sub_notes.iter().enumerate() {
+                        if is_cancelled(&cancel_flag) {
+                            cancelled = true;
+                            break;
+                        }
+
+                        let sub_previous = index.get_file_path(&sub_note.id).map(str::to_string);
+                        let sub_action = if index.has(&sub_note.id) {
+                            "updated"
+                        } else {
+                            "created"
+                        };
+
+                        match exporter.export_note(sub_note, sub_previous.as_deref()) {
+                            Ok(sub_file) => {
+                                index.update_note_entry(sub_note, sub_file.clone());
+                                if sub_action == "created" {
+                                    counters.created += 1;
+                                } else {
+                                    counters.updated += 1;
+                                }
+                                emit_log(
+                                    app,
+                                    &log_manager,
+                                    "info",
+                                    &format!(
+                                        "[子笔记 {}/{}] {}：{}",
+                                        sub_index + 1,
+                                        note.sub_notes.len(),
+                                        if sub_action == "created" {
+                                            "新增导出"
+                                        } else {
+                                            "更新导出"
+                                        },
+                                        display_title(&sub_note)
+                                    ),
+                                )?;
+                                emit_item(
+                                    app,
+                                    SyncItemEvent {
+                                        page_num,
+                                        page_index: page_index as u32 + 1,
+                                        processed_count,
+                                        total_expected,
+                                        note_id: sub_note.id.clone(),
+                                        title: sub_note.title.clone(),
+                                        action: format!("sub_{sub_action}"),
+                                        file_path: Some(sub_file),
+                                        error: None,
+                                    },
+                                )?;
+                            }
+                            Err(err) => {
+                                counters.failed += 1;
+                                emit_log(
+                                    app,
+                                    &log_manager,
+                                    "warn",
+                                    &format!(
+                                        "[子笔记 {}/{}] 导出失败：{}（{}）",
+                                        sub_index + 1,
+                                        note.sub_notes.len(),
+                                        display_title(&sub_note),
+                                        err
+                                    ),
+                                )?;
+                            }
+                        }
+                    }
                 }
                 Err(message) => {
                     counters.failed += 1;
@@ -317,12 +432,8 @@ async fn run_sync_inner(
                                 .map(|value| format!("/{value}"))
                                 .unwrap_or_default(),
                             page_index + 1,
-                            page.notes.len(),
-                            if note.title.trim().is_empty() {
-                                note.id.as_str()
-                            } else {
-                                note.title.as_str()
-                            },
+                            page_notes_len,
+                            display_title(&note),
                             message
                         ),
                     )?;
@@ -356,7 +467,7 @@ async fn run_sync_inner(
         update_snapshot(state, |snapshot| {
             snapshot.counters = counters.clone();
             snapshot.current_page = Some(page_num);
-            snapshot.page_notes = Some(page.notes.len() as u32);
+            snapshot.page_notes = Some(page_notes_len);
             snapshot.total_fetched = counters.total;
             snapshot.total_expected = total_expected;
             snapshot.processed_count = processed_count;
@@ -380,7 +491,7 @@ async fn run_sync_inner(
             break;
         }
 
-        let next_cursor = page.notes.last().map(|note| note.id.clone());
+        let next_cursor = last_page_note_id;
         if !page.has_more || next_cursor.is_none() {
             break;
         }
@@ -628,4 +739,12 @@ pub fn format_timestamp(ts_ms: u64) -> String {
         (sod % 3600) / 60,
         sod % 60
     )
+}
+
+fn display_title(note: &Note) -> &str {
+    if note.title.trim().is_empty() {
+        &note.id
+    } else {
+        note.title.trim()
+    }
 }
