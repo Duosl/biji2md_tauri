@@ -16,7 +16,6 @@ enum ExportStructure {
 #[derive(Clone, Copy)]
 enum FileNamePattern {
     Title,
-    TitleId,
     DateTitleId,
 }
 
@@ -108,7 +107,7 @@ impl FileNamePattern {
         match value.unwrap_or("title") {
             "title" => Self::Title,
             "date_title_id" => Self::DateTitleId,
-            _ => Self::TitleId,
+            _ => Self::Title,
         }
     }
 }
@@ -199,7 +198,6 @@ fn note_file_name(note: &Note, pattern: FileNamePattern) -> String {
     let id = sanitize_component(&note.id);
     match pattern {
         FileNamePattern::Title => format!("{stem}.md"),
-        FileNamePattern::TitleId => format!("{stem}__{id}.md"),
         FileNamePattern::DateTitleId => {
             let date = note_date_prefix(note);
             format!("{date}_{stem}__{id}.md")

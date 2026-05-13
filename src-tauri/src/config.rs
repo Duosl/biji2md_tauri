@@ -17,7 +17,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub export_structure: Option<String>, // flat, by_month, by_tag, by_topic
     #[serde(default)]
-    pub file_name_pattern: Option<String>, // title, title_id, date_title_id
+    pub file_name_pattern: Option<String>, // title, date_title_id
     #[serde(default)]
     pub show_sync_tips: Option<bool>,
 }

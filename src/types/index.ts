@@ -11,7 +11,7 @@ export type Settings = {
   lastMode: "incremental" | "full" | string;
   // 导出偏好设置
   exportStructure: "flat" | "by_month" | "by_tag" | "by_topic";
-  fileNamePattern: "title" | "title_id" | "date_title_id";
+  fileNamePattern: "title" | "date_title_id";
   showSyncTips: boolean;
 };
 

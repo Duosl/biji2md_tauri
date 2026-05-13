@@ -91,7 +91,7 @@
 - 支持导出目录结构：
   `flat`、`by_month`、`by_tag`
 - 支持文件名规则：
-  `title_id`、`date_title_id`
+  `title`、`date_title_id`
 - 如果标题变化导致路径变化，利用索引中的 `file_path` 做重命名或旧文件清理。[index.rs](/Users/duoshilin/duosl/sidework/biji2mdTauri/src-tauri/src/index.rs:44)
 
 6. 打开导出目录接口

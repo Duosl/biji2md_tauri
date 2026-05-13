@@ -655,9 +655,10 @@ fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
         export_structure: config
             .export_structure
             .unwrap_or_else(|| "by_topic".to_string()),
-        file_name_pattern: config
-            .file_name_pattern
-            .unwrap_or_else(|| "title".to_string()),
+        file_name_pattern: match config.file_name_pattern.as_deref() {
+            Some("date_title_id") => "date_title_id".to_string(),
+            _ => "title".to_string(),
+        },
         show_sync_tips: config.show_sync_tips.unwrap_or(true),
     }
 }

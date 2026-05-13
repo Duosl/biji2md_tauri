@@ -316,16 +316,6 @@ export function SettingsPage({
               <input
                 type="radio"
                 name="fileNamePattern"
-                value="title_id"
-                checked={settings.fileNamePattern === "title_id"}
-                onChange={(e) => saveField("fileNamePattern", e.target.value)}
-              />
-              <span>标题__ID</span>
-            </label>
-            <label className="radio-item">
-              <input
-                type="radio"
-                name="fileNamePattern"
                 value="date_title_id"
                 checked={settings.fileNamePattern === "date_title_id"}
                 onChange={(e) => saveField("fileNamePattern", e.target.value)}

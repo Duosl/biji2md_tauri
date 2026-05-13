@@ -137,7 +137,7 @@ pub struct AppConfig {
     pub last_mode: Option<String>,
     // 导出偏好
     pub export_structure: Option<String>,      // flat, by_month, by_tag, by_topic
-    pub file_name_pattern: Option<String>,     // title, title_id, date_title_id
+    pub file_name_pattern: Option<String>,     // title, date_title_id
     pub show_sync_tips: Option<bool>,
 }
 ```
@@ -249,7 +249,7 @@ npm run build:linux
 
 ### 阶段 C (P2) - 完成
 - 导出目录结构配置 (flat/by_month/by_tag)
-- 文件名规则配置 (title_id/date_title_id)
+- 文件名规则配置 (title/date_title_id)
 - 添加打开导出目录功能
 - 添加打开导出目录按钮
 
