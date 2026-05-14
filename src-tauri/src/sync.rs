@@ -1,4 +1,5 @@
 use std::{
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -11,7 +12,7 @@ use tokio::time::sleep;
 
 use crate::{
     api::ApiClient,
-    config::load_config,
+    config::{app_cache_dir, load_config, user_data_dir},
     export::Exporter,
     history::HistoryManager,
     index::IndexManager,
@@ -53,7 +54,12 @@ async fn run_sync_inner(
     let mode = SyncMode::from_optional(request.sync_mode.as_deref());
     let page_size = request.page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
 
-    let log_manager = SyncLog::open(&export_dir)?;
+    let user_data = user_data_dir()?;
+    let cache_dir = app_cache_dir(app)?;
+
+    crate::config::migrate_once(Path::new(&export_dir), &user_data, &cache_dir);
+
+    let log_manager = SyncLog::open(&user_data)?;
     log_manager.trim_if_needed()?;
 
     emit_log(
@@ -70,7 +76,7 @@ async fn run_sync_inner(
     )?;
     let config = load_config()?;
     let client = ApiClient::new(&token)?;
-    let mut index = IndexManager::load(&export_dir)?;
+    let mut index = IndexManager::load(&cache_dir)?;
     let exporter = Exporter::new(
         &export_dir,
         config.export_structure.as_deref(),
@@ -525,7 +531,7 @@ async fn run_sync_inner(
     index.save()?;
 
     // 保存同步历史记录
-    if let Ok(mut history) = HistoryManager::load(&export_dir) {
+    if let Ok(mut history) = HistoryManager::load(&user_data) {
         history.add_entry(
             sync_timestamp,
             mode.as_str(),

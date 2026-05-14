@@ -89,6 +89,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     cancelSync,
     clearSyncError,
     loadHistoryLogs,
+    openLogDir,
     openExportDir
   } = useSync();
 
@@ -128,7 +129,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
       const next = !prev;
       userCollapsedRef.current = prev;
       if (next && !isRunning && logs.length === 0 && hasExportDir) {
-        void loadHistoryLogs(settings.defaultOutputDir || "");
+        void loadHistoryLogs();
       }
       return next;
     });
@@ -458,7 +459,14 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
         <div className={`log-list ${showLogs ? "expanded" : ""}`}>
           <div className="log-header" onClick={toggleLogs}>
             <h3>日志</h3>
-            <span className="log-count">{filteredLogs.length}</span>
+            <div className="log-header-actions">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={(e) => { e.stopPropagation(); void openLogDir(); }}
+              >
+                历史日志
+              </button>
+            </div>
           </div>
 
           <div className={`log-body ${showLogs ? "expanded" : ""}`}>
@@ -473,6 +481,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
                   {filter.label}
                 </button>
               ))}
+              <span className="log-count">{filteredLogs.length}</span>
             </div>
 
             <div className="log-scroll">

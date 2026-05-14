@@ -1,7 +1,7 @@
 use std::{
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use crate::types::SyncLogEvent;
@@ -14,8 +14,8 @@ pub struct SyncLog {
 }
 
 impl SyncLog {
-    pub fn open(export_dir: &str) -> Result<Self, String> {
-        let path = PathBuf::from(export_dir).join("sync.log");
+    pub fn open(dir: impl AsRef<Path>) -> Result<Self, String> {
+        let path = dir.as_ref().join("sync.log");
         let dir = path
             .parent()
             .ok_or_else(|| "invalid export dir".to_string())?;

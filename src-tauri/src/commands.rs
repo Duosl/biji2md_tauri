@@ -400,8 +400,19 @@ pub(crate) fn open_export_dir_path(path: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_sync_overview() -> Result<SyncOverview, String> {
+pub fn open_log_dir() -> Result<(), String> {
+    let path = crate::config::user_data_dir()?;
+    open_export_dir_path(&path)
+}
+
+#[tauri::command]
+pub fn get_sync_overview(app: AppHandle) -> Result<SyncOverview, String> {
     let config = load_config()?;
+
+    let user_data = crate::config::user_data_dir()
+        .map_err(|e| format!("无法解析用户数据目录: {e}"))?;
+    let cache_dir = crate::config::app_cache_dir(&app)
+        .map_err(|e| format!("无法解析应用缓存目录: {e}"))?;
 
     // 检查配置是否完整
     let has_token = config
@@ -416,19 +427,15 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
         .is_some();
     let has_config = has_token && has_export_dir;
 
-    // 如果没有导出目录，返回空概览
-    let export_dir = match config.default_output_dir {
-        Some(dir) if !dir.trim().is_empty() => dir,
-        _ => {
-            return Ok(SyncOverview {
-                has_config: false,
-                ..Default::default()
-            });
-        }
-    };
+    if !has_config {
+        return Ok(SyncOverview {
+            has_config: false,
+            ..Default::default()
+        });
+    }
 
     // 从 index.json 读取同步时间信息
-    let index_info = IndexManager::load(&export_dir).ok().map(|index| {
+    let index_info = IndexManager::load(&cache_dir).ok().map(|index| {
         (
             index.get_last_sync_at(),
             index.get_last_full_sync_at(),
@@ -437,7 +444,7 @@ pub fn get_sync_overview() -> Result<SyncOverview, String> {
     });
 
     // 从 history.json 读取历史记录
-    let history = HistoryManager::load(&export_dir).ok();
+    let history = HistoryManager::load(&user_data).ok();
 
     let last_summary = history.as_ref().and_then(|h| {
         h.get_last_entry()
@@ -622,10 +629,10 @@ pub fn get_app_version(app: AppHandle) -> String {
 
 #[tauri::command]
 pub fn get_sync_logs(
-    export_dir: String,
     limit: Option<usize>,
 ) -> Result<Vec<SyncLogEvent>, String> {
-    let log_manager = SyncLog::open(&export_dir)?;
+    let data_dir = crate::config::user_data_dir()?;
+    let log_manager = SyncLog::open(&data_dir)?;
     log_manager.read_recent(limit.unwrap_or(500))
 }
 

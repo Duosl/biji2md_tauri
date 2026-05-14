@@ -265,10 +265,9 @@ export function useSync() {
   const clearSyncError = () => setSyncError(null);
 
   // 从文件加载历史日志（懒加载）
-  const loadHistoryLogs = useCallback(async (exportDir: string) => {
+  const loadHistoryLogs = useCallback(async () => {
     try {
       const data = await invoke<SyncLogEvent[]>("get_sync_logs", {
-        exportDir,
         limit: 500
       });
       const entries: LogEntry[] = data.map((item, index) => ({
@@ -294,6 +293,14 @@ export function useSync() {
     }
   }, [settings.defaultOutputDir]);
 
+  const openLogDir = useCallback(async () => {
+    try {
+      await invoke("open_log_dir");
+    } catch (error) {
+      console.error("Failed to open log dir:", error);
+    }
+  }, []);
+
   return {
     settings,
     snapshot,
@@ -310,6 +317,7 @@ export function useSync() {
     clearLogs,
     clearSyncError,
     loadHistoryLogs,
-    openExportDir
+    openExportDir,
+    openLogDir
   };
 }

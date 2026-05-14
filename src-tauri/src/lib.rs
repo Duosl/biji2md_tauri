@@ -32,7 +32,8 @@ pub fn run() {
             commands::get_sync_overview,
             commands::cancel_sync,
             commands::start_sync,
-            commands::get_sync_logs
+            commands::get_sync_logs,
+            commands::open_log_dir
         ])
         .run(tauri::generate_context!())
         .expect("failed to run biji2md");

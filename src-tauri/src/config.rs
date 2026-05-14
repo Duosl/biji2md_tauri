@@ -1,7 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path, path::PathBuf};
 
 use dirs::config_dir;
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
@@ -22,11 +23,66 @@ pub struct AppConfig {
     pub show_sync_tips: Option<bool>,
 }
 
+// ~/.biji2md/
+pub fn user_data_dir() -> Result<PathBuf, String> {
+    dirs::home_dir()
+        .map(|h| h.join(".biji2md"))
+        .ok_or_else(|| "failed to resolve home directory".to_string())
+}
+
+// app_data_dir (Tauri 沙盒)，用于 index 等可重建数据
+pub fn app_cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))
+}
+
+pub(crate) fn migrate_file(src: &Path, dst: &Path) {
+    if src.exists() && !dst.exists() {
+        if let Some(parent) = dst.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::copy(src, dst);
+    }
+}
+
+const MIGRATION_FLAG: &str = ".migrated";
+
+pub(crate) fn migrate_once(export_dir: &Path, user_data: &Path, cache_dir: &Path) {
+    let flag_path = user_data.join(MIGRATION_FLAG);
+    if flag_path.exists() {
+        return;
+    }
+    migrate_file(&export_dir.join("index.json"), &cache_dir.join("index.json"));
+    migrate_file(&export_dir.join("history.json"), &user_data.join("history.json"));
+    migrate_file(&export_dir.join("sync.log"), &user_data.join("sync.log"));
+
+    let all_migrated = cache_dir.join("index.json").exists()
+        && user_data.join("history.json").exists()
+        && user_data.join("sync.log").exists();
+    if all_migrated {
+        let _ = fs::write(
+            &flag_path,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                .to_string(),
+        );
+    }
+}
+
 pub fn load_config() -> Result<AppConfig, String> {
     let path = config_file_path()?;
 
     if !path.exists() {
-        return Ok(AppConfig::default());
+        if let Some(old_dir) = config_dir() {
+            let old_path = old_dir.join("biji2md").join("config.json");
+            migrate_file(&old_path, &path);
+        }
+        if !path.exists() {
+            return Ok(AppConfig::default());
+        }
     }
 
     let raw =
@@ -56,8 +112,6 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 }
 
 pub fn config_file_path() -> Result<PathBuf, String> {
-    let dir =
-        config_dir().ok_or_else(|| "failed to resolve system config directory".to_string())?;
-
-    Ok(dir.join("biji2md").join("config.json"))
+    let dir = user_data_dir()?;
+    Ok(dir.join("config.json"))
 }
