@@ -672,7 +672,7 @@ export function SettingsPage({
                 <div className="reexport-option" onClick={handlePickNewDir}>
                   <span className="reexport-option-icon"></span>
                   <div className="reexport-option-body">
-                    <p className="reexport-option-title">1. 导出到新目录（推荐）</p>
+                    <p className="reexport-option-title">1. 导出到新目录</p>
                     <p className="reexport-option-desc">导出到新目录，与当前目录互相隔离，不受影响当前目录结构</p>
                   </div>
                   <span className="reexport-option-action">选择目录</span>

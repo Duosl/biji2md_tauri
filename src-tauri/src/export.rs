@@ -185,7 +185,7 @@ impl Exporter {
         );
 
         if let Some(ref parent_id) = note.parent_id {
-            frontmatter.push_str(&format!("\n父笔记ID: {}", yaml_string(parent_id)));
+            frontmatter.push_str(&format!("\n主笔记ID: {}", yaml_string(parent_id)));
         }
 
         let mut body = normalized_content;

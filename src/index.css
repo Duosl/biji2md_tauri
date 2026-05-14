@@ -2387,8 +2387,15 @@ textarea {
 
 .sync-progress-grid,
 .sync-result-grid {
-  grid-template-columns: repeat(5, 1fr);
   margin-top: 20px;
+}
+
+.sync-progress-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.sync-result-grid {
+  grid-template-columns: repeat(6, 1fr);
 }
 
 .sync-overview-grid .stat-cell,

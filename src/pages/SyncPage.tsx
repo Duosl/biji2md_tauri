@@ -21,6 +21,7 @@ type DisplaySummary = {
   timestamp?: number | null;
   mode: string;
   total: number;
+  exported: number;
   created: number;
   updated: number;
   skipped: number;
@@ -147,6 +148,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
         timestamp: snapshot.finishedAt ?? Date.now(),
         mode: snapshot.mode || mode,
         total: summary.total,
+        exported: summary.created + summary.updated,
         created: summary.created,
         updated: summary.updated,
         skipped: summary.skipped,
@@ -158,6 +160,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           timestamp: overview.lastSummary.timestamp,
           mode: overview.lastSummary.mode,
           total: overview.lastSummary.total,
+          exported: overview.lastSummary.created + overview.lastSummary.updated,
           created: overview.lastSummary.created,
           updated: overview.lastSummary.updated,
           skipped: overview.lastSummary.skipped,
@@ -260,7 +263,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
             <span>上次同步</span>
             <small>
               {resultSummary
-                ? `${resultSummary.mode === "full" ? "全量" : "增量"} · ${resultSummary.total} 条`
+                ? `${resultSummary.mode === "full" ? "全量" : "增量"} · ${resultSummary.total} 个主笔记`
                 : "还没有同步历史"}
             </small>
           </div>
@@ -371,7 +374,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
       {hasCurrentRun && (
         <section className="section sync-panel">
           <div className="progress-header">
-            <span className="progress-title">同步进度</span>
+            <span className="progress-title">主笔记处理进度</span>
             <span className="progress-count">
               {hasRealTotal
                 ? `${snapshot.processedCount || 0} / ${progressTotal}`
@@ -389,29 +392,29 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           <div className="progress-meta">
             <span>{statusText}</span>
             {snapshot.currentPage ? <span>第 {snapshot.currentPage} 页</span> : null}
-            {snapshot.pageNotes ? <span>本页 {snapshot.pageNotes} 条</span> : null}
+            {snapshot.pageNotes ? <span>本页 {snapshot.pageNotes} 个主笔记</span> : null}
           </div>
 
           <div className="stat-grid sync-progress-grid">
             <div className="stat-cell">
               <strong>{snapshot.totalFetched || 0}</strong>
-              <span>拉取</span>
+              <span>已拉取主笔记</span>
             </div>
             <div className="stat-cell">
               <strong>{snapshot.counters.created || 0}</strong>
-              <span>新增</span>
+              <span>新增文件</span>
             </div>
             <div className="stat-cell">
               <strong>{snapshot.counters.updated || 0}</strong>
-              <span>更新</span>
+              <span>更新文件</span>
             </div>
             <div className="stat-cell">
               <strong>{snapshot.counters.skipped || 0}</strong>
-              <span>跳过</span>
+              <span>跳过主笔记</span>
             </div>
             <div className="stat-cell">
               <strong>{snapshot.counters.failed || 0}</strong>
-              <span>失败</span>
+              <span>导出失败</span>
             </div>
           </div>
         </section>
@@ -432,23 +435,27 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           <div className="stat-grid sync-result-grid">
             <div className="stat-cell">
               <strong>{resultSummary.total}</strong>
-              <span>总计</span>
+              <span>主笔记</span>
+            </div>
+            <div className="stat-cell">
+              <strong>{resultSummary.exported}</strong>
+              <span>导出文件</span>
             </div>
             <div className="stat-cell">
               <strong>{resultSummary.created}</strong>
-              <span>新增</span>
+              <span>新增文件</span>
             </div>
             <div className="stat-cell">
               <strong>{resultSummary.updated}</strong>
-              <span>更新</span>
+              <span>更新文件</span>
             </div>
             <div className="stat-cell">
               <strong>{resultSummary.skipped}</strong>
-              <span>跳过</span>
+              <span>跳过主笔记</span>
             </div>
             <div className="stat-cell">
               <strong>{resultSummary.failed}</strong>
-              <span>失败</span>
+              <span>导出失败</span>
             </div>
           </div>
         </section>
