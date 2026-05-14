@@ -42,7 +42,8 @@ biji2md/
 │   │   ├── types.rs             # 数据结构定义
 │   │   ├── config.rs            # 配置管理
 │   │   ├── api.rs               # API 客户端
-│   │   ├── index.rs             # 本地索引管理
+│   ├── cache.rs             # 本地笔记缓存 (notes-cache.json)
+│   ├── index.rs             # 本地索引管理 (index.json)
 │   │   ├── export.rs            # Markdown 导出逻辑
 │   │   ├── log.rs               # 同步日志持久化 (sync.log)
 │   │   ├── sync.rs              # 同步流程
@@ -61,9 +62,10 @@ biji2md/
 
 | 模块 | 职责 |
 |------|------|
-| types.rs | 核心数据结构 (Note, Index, SyncSnapshot, SyncOverview...) |
+| types.rs | 核心数据结构 (Note, Index, SyncSnapshot, SyncOverview, CacheInfo...) |
 | config.rs | 应用配置持久化 (config.json) |
-| api.rs | API 客户端，处理网络请求 |
+| api.rs | API 客户端，处理网络请求，内部暂存原始 JSON 数据 |
+| cache.rs | 本地笔记缓存 (notes-cache.json)，HashMap<id, raw Value> |
 | index.rs | 本地索引管理 (index.json) |
 | export.rs | Markdown 文件生成 |
 | log.rs | 同步日志持久化 (sync.log)，自动裁剪超 10MB 保留 1000 行 |
@@ -137,7 +139,6 @@ pub struct AppConfig {
     pub last_mode: Option<String>,
     // 导出偏好
     pub export_structure: Option<String>,      // flat, by_month, by_tag, by_topic
-    pub file_name_pattern: Option<String>,     // title, date_title_id
     pub show_sync_tips: Option<bool>,
 }
 ```
@@ -178,6 +179,8 @@ pub struct SyncOverview {
 | install_update() | 下载并安装更新 |
 | get_app_version() | 获取当前应用版本号 |
 | get_sync_logs(export_dir, limit) | 从 sync.log 加载历史日志 |
+| get_cache_info() | 获取笔记缓存元信息（是否存在、条数、时间戳、文件大小） |
+| reexport_from_cache() | 从本地缓存重新导出 Markdown 文件 |
 
 > 前端更新入口以 `useUpdater` 为主：启动后静默检查并下载，设置页复用同一份更新状态；下载完成后 Toolbar 和设置页只触发 `relaunch()`，避免重复下载。`process:allow-restart` 必须保留在 capability 中。
 
@@ -249,7 +252,7 @@ npm run build:linux
 
 ### 阶段 C (P2) - 完成
 - 导出目录结构配置 (flat/by_month/by_tag)
-- 文件名规则配置 (title/date_title_id)
+- 文件名规则固定为 title（移除 date_title_id 选项和用户配置）
 - 添加打开导出目录功能
 - 添加打开导出目录按钮
 
@@ -308,3 +311,24 @@ npm run build:linux
 - 设置页「关于」区域改为品牌信息面板，使用 `ic_logo.svg` 并展示下载/就绪/错误状态
 - 移除 Toolbar 左侧拖拽区域，避免标题栏按钮被 `data-tauri-drag-region` 吃掉点击
 - 更新检查日志增加 endpoint、请求参数、HTTP 状态与响应摘要，便于诊断私有仓库、404、签名等问题
+
+### 阶段 J (本地笔记缓存) - 完成
+- 新增 `cache.rs` 模块：CacheManager 管理以 note_id 为 key 的 HashMap 缓存（原始 serde_json::Value）
+- 存储位置：`dirs::config_dir()/biji2md/notes-cache.json`（跟随应用走，不绑定导出目录）
+- `api.rs` 前置改造：精简 extract_notes 为精确 c.list 路径；ApiClient 新增 last_raw_notes 暂存 + take_raw_notes()
+- 同步流程自动填充缓存：每页拉取后 take_raw + upsert_raw；子笔记同样缓存；同步完成后保存
+- 新增 `reexport_from_cache` Tauri 命令：从缓存读取原始数据 → 用当前版 note_from_value 解析 → Exporter 重导出
+- 新增 `get_cache_info` Tauri 命令：返回缓存元信息（是否存在、条数、时间戳、文件大小）
+- 前端 useSync 扩展 cacheInfo/loadCacheInfo/reexportFromCache
+- SyncPage 添加「📦 使用缓存重导出」按钮 + 缓存状态展示
+- Tag 结构体新增 tag_type 字段
+- note_from_value 改为 pub（供 reexport 路径使用）
+
+### 阶段 K (Bug 修复 & 精简) - 进行中
+- 文件名模式精简：移除 `date_title_id`，仅保留 `title`，移除用户配置 UI
+- 修复重导出结束后按钮卡在置灰状态（catch_unwind + disabled 保护）
+- 修复 `run_reexport` IndexManager 加载路径不一致，统一从 app_cache_dir 获取
+- `run_reexport` 日志持久化到 sync.log（开始/错误/完成摘要）
+- 迁移成功后删除导出目录中的原文件（index.json/history.json/sync.log）
+- SyncStatus 新增 `Cancelled` 终态变体，取消完成状态正确区分
+- 重导出按钮增加 `disabled={isRunning}` 防止并发点击

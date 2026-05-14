@@ -296,35 +296,6 @@ export function SettingsPage({
           </div>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">
-            文件名规则
-            {renderFieldStatus("fileNamePattern")}
-          </label>
-          <div className="radio-group">
-            <label className="radio-item">
-              <input
-                type="radio"
-                name="fileNamePattern"
-                value="title"
-                checked={settings.fileNamePattern === "title"}
-                onChange={(e) => saveField("fileNamePattern", e.target.value)}
-              />
-              <span>仅标题</span>
-            </label>
-            <label className="radio-item">
-              <input
-                type="radio"
-                name="fileNamePattern"
-                value="date_title_id"
-                checked={settings.fileNamePattern === "date_title_id"}
-                onChange={(e) => saveField("fileNamePattern", e.target.value)}
-              />
-              <span>日期_标题__ID</span>
-            </label>
-          </div>
-        </div>
-
       </section>
 
       {/* 关于与更新 */}

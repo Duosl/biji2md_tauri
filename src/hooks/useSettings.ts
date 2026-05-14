@@ -23,7 +23,6 @@ export function useSettings() {
     defaultPageSize: 100,
     lastMode: "incremental",
     exportStructure: "by_topic",
-    fileNamePattern: "title",
     showSyncTips: true
   });
 
@@ -170,9 +169,6 @@ export function useSettings() {
       }
       if (input.exportStructure !== undefined) {
         promises.push(saveField("exportStructure", input.exportStructure));
-      }
-      if (input.fileNamePattern !== undefined) {
-        promises.push(saveField("fileNamePattern", input.fileNamePattern));
       }
       if (input.showSyncTips !== undefined) {
         promises.push(saveField("showSyncTips", input.showSyncTips));

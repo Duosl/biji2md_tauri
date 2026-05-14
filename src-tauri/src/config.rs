@@ -18,8 +18,6 @@ pub struct AppConfig {
     #[serde(default)]
     pub export_structure: Option<String>, // flat, by_month, by_tag, by_topic
     #[serde(default)]
-    pub file_name_pattern: Option<String>, // title, date_title_id
-    #[serde(default)]
     pub show_sync_tips: Option<bool>,
 }
 
@@ -53,22 +51,34 @@ pub(crate) fn migrate_once(export_dir: &Path, user_data: &Path, cache_dir: &Path
     if flag_path.exists() {
         return;
     }
-    migrate_file(&export_dir.join("index.json"), &cache_dir.join("index.json"));
-    migrate_file(&export_dir.join("history.json"), &user_data.join("history.json"));
-    migrate_file(&export_dir.join("sync.log"), &user_data.join("sync.log"));
 
-    let all_migrated = cache_dir.join("index.json").exists()
-        && user_data.join("history.json").exists()
-        && user_data.join("sync.log").exists();
+    let index_src = export_dir.join("index.json");
+    let history_src = export_dir.join("history.json");
+    let log_src = export_dir.join("sync.log");
+
+    let index_dst = cache_dir.join("index.json");
+    let history_dst = user_data.join("history.json");
+    let log_dst = user_data.join("sync.log");
+
+    migrate_file(&index_src, &index_dst);
+    migrate_file(&history_src, &history_dst);
+    migrate_file(&log_src, &log_dst);
+
+    let all_migrated = index_dst.exists()
+        && history_dst.exists()
+        && log_dst.exists();
+
     if all_migrated {
-        let _ = fs::write(
-            &flag_path,
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-                .to_string(),
-        );
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+        let _ = fs::write(&flag_path, timestamp);
+
+        for src in [&index_src, &history_src, &log_src] {
+            let _ = fs::remove_file(src);
+        }
     }
 }
 

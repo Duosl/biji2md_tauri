@@ -1,4 +1,5 @@
 mod api;
+mod cache;
 mod commands;
 mod config;
 mod export;
@@ -33,6 +34,8 @@ pub fn run() {
             commands::cancel_sync,
             commands::start_sync,
             commands::get_sync_logs,
+            commands::get_cache_info,
+            commands::reexport_from_cache,
             commands::open_log_dir
         ])
         .run(tauri::generate_context!())

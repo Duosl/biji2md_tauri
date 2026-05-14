@@ -14,6 +14,7 @@ use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::oneshot;
 
 use crate::{
+    cache::CacheManager,
     config::{load_config, save_config},
     history::HistoryManager,
     index::IndexManager,
@@ -21,8 +22,9 @@ use crate::{
     state::{AppState, RuntimeState},
     sync::run_sync,
     types::{
-        mask_secret, AppSettings, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput,
-        StartSyncRequest, SyncLogEvent, SyncOverview, SyncSnapshot, SyncStatus, UpdateInfo,
+        mask_secret, AppSettings, CacheInfo, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput,
+        StartSyncRequest, SyncCompletedEvent, SyncLogEvent, SyncOverview, SyncSnapshot, SyncStatus,
+        UpdateInfo,
     },
 };
 
@@ -90,9 +92,6 @@ pub fn save_settings(input: SaveSettingsInput) -> Result<AppSettings, String> {
     if let Some(export_structure) = input.export_structure {
         config.export_structure = Some(export_structure);
     }
-    if let Some(file_name_pattern) = input.file_name_pattern {
-        config.file_name_pattern = Some(file_name_pattern);
-    }
     if let Some(show_sync_tips) = input.show_sync_tips {
         config.show_sync_tips = Some(show_sync_tips);
     }
@@ -129,11 +128,6 @@ pub fn save_setting_field(input: SaveSettingFieldInput) -> Result<AppSettings, S
         "exportStructure" => {
             if let Some(val) = input.value.as_str() {
                 config.export_structure = Some(val.to_string());
-            }
-        }
-        "fileNamePattern" => {
-            if let Some(val) = input.value.as_str() {
-                config.file_name_pattern = Some(val.to_string());
             }
         }
         "showSyncTips" => {
@@ -662,10 +656,266 @@ fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
         export_structure: config
             .export_structure
             .unwrap_or_else(|| "by_topic".to_string()),
-        file_name_pattern: match config.file_name_pattern.as_deref() {
-            Some("date_title_id") => "date_title_id".to_string(),
-            _ => "title".to_string(),
-        },
+        file_name_pattern: "title".to_string(),
         show_sync_tips: config.show_sync_tips.unwrap_or(true),
+    }
+}
+
+#[tauri::command]
+pub fn get_cache_info() -> Result<CacheInfo, String> {
+    match CacheManager::load() {
+        Ok(manager) => Ok(manager.info()),
+        Err(_) => Ok(CacheInfo {
+            exists: false,
+            total_count: 0,
+            cached_at: None,
+            file_size_bytes: None,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn reexport_from_cache(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<SyncCompletedEvent, String> {
+    let (export_dir, cache, cancel_flag, cache_dir) = {
+        let mut guard = state
+            .inner
+            .lock()
+            .map_err(|_| "failed to lock runtime state".to_string())?;
+
+        if guard.snapshot.running {
+            return Err("已有同步任务正在运行。".to_string());
+        }
+
+        let config = load_config()?;
+        let export_dir = config
+            .default_output_dir
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| "缺少导出目录。请先选择导出目录。".to_string())?;
+        ensure_export_dir_writable(&export_dir)?;
+
+        let cache = CacheManager::load().map_err(|error| format!("加载缓存失败：{error}"))?;
+        if cache.is_empty() {
+            return Err("暂无缓存数据。请先完成一次同步。".to_string());
+        }
+
+        guard.cancel_flag = Some(Arc::new(AtomicBool::new(false)));
+        guard.snapshot = SyncSnapshot {
+            status: SyncStatus::Running,
+            running: true,
+            cancel_requested: false,
+            mode: Some("cache_reexport".to_string()),
+            export_dir: Some(export_dir.clone()),
+            page_size: None,
+            current_page: None,
+            page_notes: None,
+            processed_count: 0,
+            total_fetched: 0,
+            total_expected: Some(cache.len() as u32),
+            current_message: "使用缓存重导出中...".to_string(),
+            index_path: None,
+            started_at: Some(crate::sync::now_millis()),
+            finished_at: None,
+            counters: Default::default(),
+        };
+
+        (export_dir, cache, guard.cancel_flag.clone().unwrap(), crate::config::app_cache_dir(&app).ok())
+    };
+
+    let runtime_state = state.inner.clone();
+    let runtime_state_cleanup = runtime_state.clone();
+    let app_clone = app.clone();
+    let app_emit = app.clone();
+
+    tokio::spawn(async move {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let rt = tokio::runtime::Handle::current();
+            rt.block_on(run_reexport(app_clone, runtime_state, export_dir, cache, cancel_flag, cache_dir))
+        }));
+
+        let completed = match result {
+            Ok(Ok(c)) => Some(c),
+            Ok(Err(e)) => {
+                let _ = app_emit.emit("sync_log", SyncLogEvent {
+                    ts: crate::sync::now_millis(),
+                    level: "error".to_string(),
+                    message: format!("重导出失败：{e}"),
+                });
+                None
+            }
+            Err(_) => {
+                let _ = app_emit.emit("sync_log", SyncLogEvent {
+                    ts: crate::sync::now_millis(),
+                    level: "error".to_string(),
+                    message: "重导出过程中发生内部错误".to_string(),
+                });
+                None
+            }
+        };
+
+        if let Ok(mut guard) = runtime_state_cleanup.lock() {
+            guard.snapshot.running = false;
+            guard.snapshot.cancel_requested = false;
+            if let Some(ref c) = completed {
+                guard.snapshot.status = SyncStatus::Completed;
+                guard.snapshot.finished_at = Some(crate::sync::now_millis());
+                guard.snapshot.counters.total = c.total;
+                guard.snapshot.counters.created = c.created;
+                guard.snapshot.counters.updated = c.updated;
+                guard.snapshot.counters.skipped = c.skipped;
+                guard.snapshot.counters.failed = c.failed;
+                let _ = app_emit.emit("sync_completed", c);
+            } else {
+                guard.snapshot.status = SyncStatus::Failed;
+                guard.snapshot.finished_at = Some(crate::sync::now_millis());
+                guard.snapshot.current_message = "重导出失败".to_string();
+            }
+        }
+    });
+
+    Ok(SyncCompletedEvent {
+        total: 0,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        cancelled: false,
+        index_path: String::new(),
+    })
+}
+
+async fn run_reexport(
+    app: AppHandle,
+    state: Arc<std::sync::Mutex<RuntimeState>>,
+    export_dir: String,
+    cache: CacheManager,
+    cancel_flag: Arc<AtomicBool>,
+    cache_dir: Option<std::path::PathBuf>,
+) -> Result<SyncCompletedEvent, String> {
+    use crate::{
+        api::note_from_value,
+        export::Exporter,
+        index::IndexManager,
+        log::SyncLog,
+        types::{Note, SyncCounters},
+    };
+
+    let index_path = cache_dir
+        .as_ref()
+        .map(|path| path.join("index.json"))
+        .unwrap_or_else(|| std::path::PathBuf::from(&export_dir).join("index.json"));
+
+    let config = load_config()?;
+    let exporter = Exporter::new(
+        &export_dir,
+        config.export_structure.as_deref(),
+    )?;
+    let mut index = IndexManager::load(&index_path)?;
+    let log_manager = SyncLog::open(&export_dir)?;
+
+    let total = cache.len() as u32;
+    let mut counters = SyncCounters::default();
+    let is_cancelled = || cancel_flag.load(Ordering::Relaxed);
+
+    let _ = log_manager.append(crate::sync::now_millis(), "info", &format!("开始重导出，共 {} 条缓存笔记", total));
+
+    for (idx, raw) in cache.iter().enumerate() {
+        if is_cancelled() {
+            break;
+        }
+
+        let note: Option<Note> = note_from_value(raw);
+        let Some(note) = note else {
+            counters.failed += 1;
+            continue;
+        };
+
+        let previous_file_path = index.get_file_path(&note.id);
+        match exporter.export_note(&note, previous_file_path.as_deref()) {
+            Ok(file_name) => {
+                index.update_note_entry(&note, file_name);
+                counters.created += 1;
+            }
+            Err(err) => {
+                counters.failed += 1;
+                let _ = log_manager.append(crate::sync::now_millis(), "error", &format!("重导出失败 [{}]: {}", note.title, err));
+                let _ = app.emit("sync_item", crate::types::SyncItemEvent {
+                    page_num: 1,
+                    page_index: idx as u32,
+                    processed_count: idx as u32 + 1,
+                    total_expected: Some(total),
+                    note_id: note.id.clone(),
+                    title: note.title.clone(),
+                    action: "failed".to_string(),
+                    file_path: None,
+                    error: Some(err),
+                });
+                continue;
+            }
+        }
+
+        let _ = app.emit("sync_item", crate::types::SyncItemEvent {
+            page_num: 1,
+            page_index: idx as u32,
+            processed_count: idx as u32 + 1,
+            total_expected: Some(total),
+            note_id: note.id.clone(),
+            title: note.title.clone(),
+            action: "created".to_string(),
+            file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
+            error: None,
+        });
+
+        update_snapshot_for_reexport(&app, &state, |snapshot| {
+            snapshot.processed_count = idx as u32 + 1;
+            snapshot.current_message = format!(
+                "重导出进度：{}/{}",
+                idx + 1,
+                total
+            );
+        });
+
+        if idx % 10 == 0 && idx > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
+    index.save()?;
+
+    let cancelled = is_cancelled();
+    let _ = log_manager.append(
+        crate::sync::now_millis(),
+        if cancelled { "warn" } else { "info" },
+        &format!(
+            "重导出完成：创建 {}，更新 {}，跳过 {}，失败 {}",
+            counters.created, counters.updated, counters.skipped, counters.failed
+        ),
+    );
+
+    Ok(SyncCompletedEvent {
+        total: counters.created + counters.updated,
+        created: counters.created,
+        updated: counters.updated,
+        skipped: counters.skipped,
+        failed: counters.failed,
+        cancelled,
+        index_path: index.index_path().display().to_string(),
+    })
+}
+
+fn update_snapshot_for_reexport<F>(
+    app: &AppHandle,
+    state: &Arc<std::sync::Mutex<RuntimeState>>,
+    updater: F,
+) where
+    F: FnOnce(&mut crate::types::SyncSnapshot),
+{
+    if let Ok(mut guard) = state.lock() {
+        updater(&mut guard.snapshot);
+        let snapshot = guard.snapshot.clone();
+        let _ = app.emit("sync_state", &snapshot);
     }
 }

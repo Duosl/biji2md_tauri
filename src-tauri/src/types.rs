@@ -33,6 +33,8 @@ pub struct Tag {
     pub id: Option<String>,
     #[serde(default)]
     pub name: String,
+    #[serde(default)]
+    pub tag_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -167,6 +169,7 @@ pub enum SyncStatus {
     Running,
     Cancelling,
     Completed,
+    Cancelled,
     Failed,
 }
 
@@ -352,4 +355,13 @@ pub fn mask_secret(value: &str, visible_start: usize, visible_end: usize) -> Str
         "*".repeat(8),
         &value[value.len() - visible_end..]
     )
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheInfo {
+    pub exists: bool,
+    pub total_count: usize,
+    pub cached_at: Option<u64>,
+    pub file_size_bytes: Option<u64>,
 }

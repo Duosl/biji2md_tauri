@@ -3,3 +3,9 @@
 [ ] index.json history.json  sync.log -> log.log 放到 app 私有目录 或者 ~/.biji2md，对用户无用，加个按钮支持用户打开日志文件
 [x] 日志默认选中关键节点
 [ ] 支持选择 ob wikilink 或者 markdown normal link
+
+[x] 还有日期_标题_id 格式，不需要 id 了
+[ ] 导出，重导出 UI 优化，如何布局
+[ ] 重导出结束后，按钮还不能点击，处于置灰状态
+[ ] 日志数量显示在标签胶囊外
+[ ] 迁移成功后是否要删除原文件？或者在新目录下留个 .bak 备份文件

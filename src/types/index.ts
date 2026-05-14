@@ -11,7 +11,6 @@ export type Settings = {
   lastMode: "incremental" | "full" | string;
   // 导出偏好设置
   exportStructure: "flat" | "by_month" | "by_tag" | "by_topic";
-  fileNamePattern: "title" | "date_title_id";
   showSyncTips: boolean;
 };
 
@@ -122,5 +121,12 @@ export type UpdateInfo = {
   version?: string;
   currentVersion: string;
   body?: string;
-  date?: string;
+  date?: string | null;
+};
+
+export type CacheInfo = {
+  exists: boolean;
+  totalCount: number;
+  cachedAt?: number | null;
+  fileSizeBytes?: number | null;
 };

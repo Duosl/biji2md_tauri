@@ -12,6 +12,7 @@ use tokio::time::sleep;
 
 use crate::{
     api::ApiClient,
+    cache::CacheManager,
     config::{app_cache_dir, load_config, user_data_dir},
     export::Exporter,
     history::HistoryManager,
@@ -75,12 +76,12 @@ async fn run_sync_inner(
         &format!("输出目录：{export_dir}"),
     )?;
     let config = load_config()?;
-    let client = ApiClient::new(&token)?;
+    let mut client = ApiClient::new(&token)?;
+    let mut cache = CacheManager::load().unwrap_or_default();
     let mut index = IndexManager::load(&cache_dir)?;
     let exporter = Exporter::new(
         &export_dir,
         config.export_structure.as_deref(),
-        config.file_name_pattern.as_deref(),
     )?;
     let previous_last_note_id = index.get_last_note_id();
     let last_sync_at = index.get_last_sync_at();
@@ -146,6 +147,12 @@ async fn run_sync_inner(
                 "create_asc",
             )
             .await?;
+
+        for raw in client.take_raw_notes() {
+            if let Some(id) = raw.get("id").and_then(|v| v.as_str()) {
+                cache.upsert_raw(id, raw.clone());
+            }
+        }
 
         emit_log(
             app,
@@ -220,6 +227,13 @@ async fn run_sync_inner(
                                 child.topics = note.topics.clone();
                             }
                             note.sub_notes = children;
+
+                            for raw in client.take_raw_notes() {
+                                if let Some(id) = raw.get("id").and_then(|v| v.as_str()) {
+                                    cache.upsert_raw(id, raw.clone());
+                                }
+                            }
+
                             emit_log(
                                 app,
                                 &log_manager,
@@ -545,8 +559,30 @@ async fn run_sync_inner(
         let _ = history.save();
     }
 
+    if !cache.is_empty() {
+        cache.set_cached_at(sync_timestamp);
+        match cache.save() {
+            Ok(()) => {
+                emit_log(
+                    app,
+                    &log_manager,
+                    "info",
+                    &format!("笔记缓存已保存：{} 条", cache.len()),
+                )?;
+            }
+            Err(e) => {
+                emit_log(
+                    app,
+                    &log_manager,
+                    "warn",
+                    &format!("缓存保存失败（不影响同步）：{}", e),
+                )?;
+            }
+        }
+    }
+
     let final_status = if cancelled {
-        SyncStatus::Completed
+        SyncStatus::Cancelled
     } else {
         SyncStatus::Completed
     };

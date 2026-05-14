@@ -14,6 +14,7 @@ pub struct NotesPage {
 pub struct ApiClient {
     client: Client,
     token: String,
+    last_raw_notes: Vec<serde_json::Value>,
 }
 
 impl ApiClient {
@@ -26,11 +27,16 @@ impl ApiClient {
         Ok(Self {
             client,
             token: token.to_string(),
+            last_raw_notes: Vec::new(),
         })
     }
 
+    pub fn take_raw_notes(&mut self) -> Vec<serde_json::Value> {
+        std::mem::take(&mut self.last_raw_notes)
+    }
+
     pub async fn get_notes_page(
-        &self,
+        &mut self,
         limit: usize,
         since_id: Option<&str>,
         sort: &str,
@@ -69,15 +75,19 @@ impl ApiClient {
             .await
             .map_err(|error| format!("failed to decode notes response: {error}"))?;
 
+        let raw = extract_raw_list(&value);
+        self.last_raw_notes = raw.clone();
+        let notes = extract_notes_from_list(&raw);
+
         Ok(NotesPage {
-            notes: extract_notes(&value),
+            notes,
             has_more: extract_has_more(&value),
             total_items: extract_total_items(&value),
         })
     }
 
     pub async fn get_note_children(
-        &self,
+        &mut self,
         prime_id: &str,
         limit: usize,
     ) -> Result<Vec<Note>, String> {
@@ -111,33 +121,22 @@ impl ApiClient {
             .await
             .map_err(|error| format!("failed to decode children response: {error}"))?;
 
-        Ok(extract_notes(&value))
+        let raw = extract_raw_list(&value);
+        self.last_raw_notes = raw.clone();
+
+        Ok(extract_notes_from_list(&raw))
     }
 }
 
-fn extract_notes(value: &Value) -> Vec<Note> {
-    let candidates = [
-        value,
-        &value["c"]["list"],
-        &value["c"]["notes"],
-        &value["data"],
-        &value["data"]["list"],
-        &value["data"]["notes"],
-        &value["list"],
-        &value["notes"],
-        &value["items"],
-    ];
+fn extract_raw_list(value: &Value) -> Vec<serde_json::Value> {
+    value["c"]["list"]
+        .as_array()
+        .map(|arr| arr.clone())
+        .unwrap_or_default()
+}
 
-    for candidate in candidates {
-        if let Some(array) = candidate.as_array() {
-            let notes: Vec<Note> = array.iter().filter_map(note_from_value).collect();
-            if !notes.is_empty() {
-                return notes;
-            }
-        }
-    }
-
-    Vec::new()
+fn extract_notes_from_list(list: &[serde_json::Value]) -> Vec<Note> {
+    list.iter().filter_map(note_from_value).collect()
 }
 
 fn extract_has_more(value: &Value) -> bool {
@@ -148,7 +147,7 @@ fn extract_total_items(value: &Value) -> Option<u64> {
     value["c"]["total_items"].as_u64()
 }
 
-fn note_from_value(value: &Value) -> Option<Note> {
+pub fn note_from_value(value: &Value) -> Option<Note> {
     let id = string_field(value, &["id", "note_id", "noteId"])?;
     let title = string_field(value, &["title", "name"]).unwrap_or_else(|| "Untitled".to_string());
     let content = string_field(value, &["content", "body", "text"]).unwrap_or_default();
@@ -210,13 +209,15 @@ fn parse_tags(value: Option<&Value>) -> Vec<Tag> {
                 return Some(Tag {
                     id: None,
                     name: name.to_string(),
+                    tag_type: None,
                 });
             }
 
             let name = string_field(item, &["name", "title"])?;
             let id = string_field(item, &["id", "tag_id", "tagId"]);
+            let tag_type = string_field(item, &["tag_type"]);
 
-            Some(Tag { id, name })
+            Some(Tag { id, name, tag_type })
         })
         .collect()
 }

@@ -84,10 +84,12 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     overview,
     failedItems,
     syncError,
+    cacheInfo,
     saveSettings,
     startSync,
     cancelSync,
     clearSyncError,
+    reexportFromCache,
     loadHistoryLogs,
     openLogDir,
     openExportDir
@@ -310,6 +312,26 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
               </>
             )}
           </button>
+
+          {cacheInfo?.exists && !isRunning && isConfigComplete && (
+            <button
+              className="sync-button sync-button-secondary"
+              onClick={() => void reexportFromCache()}
+              disabled={isRunning}
+            >
+              📦 使用缓存重导出
+            </button>
+          )}
+
+          {cacheInfo && (
+            <div className="cache-status">
+              {cacheInfo.exists ? (
+                <>📦 缓存 {cacheInfo.totalCount} 条 · 更新于 {formatTimestamp(cacheInfo.cachedAt)}</>
+              ) : (
+                <>暂无缓存，完成一次同步后将自动创建</>
+              )}
+            </div>
+          )}
         </div>
 
         {!isConfigComplete && (

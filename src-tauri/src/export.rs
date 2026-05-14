@@ -13,23 +13,15 @@ enum ExportStructure {
     ByTopic,
 }
 
-#[derive(Clone, Copy)]
-enum FileNamePattern {
-    Title,
-    DateTitleId,
-}
-
 pub struct Exporter {
     export_dir: PathBuf,
     structure: ExportStructure,
-    file_name_pattern: FileNamePattern,
 }
 
 impl Exporter {
     pub fn new(
         export_dir: impl AsRef<Path>,
         structure: Option<&str>,
-        file_name_pattern: Option<&str>,
     ) -> Result<Self, String> {
         let export_dir = export_dir.as_ref().to_path_buf();
         fs::create_dir_all(&export_dir)
@@ -38,12 +30,11 @@ impl Exporter {
         Ok(Self {
             export_dir,
             structure: ExportStructure::from_optional(structure),
-            file_name_pattern: FileNamePattern::from_optional(file_name_pattern),
         })
     }
 
     pub fn preview_relative_path(&self, note: &Note) -> String {
-        let file_name = note_file_name(note, self.file_name_pattern);
+        let file_name = note_file_name(note);
         match self.structure {
             ExportStructure::Flat => file_name,
             ExportStructure::ByMonth => {
@@ -102,16 +93,6 @@ impl ExportStructure {
     }
 }
 
-impl FileNamePattern {
-    fn from_optional(value: Option<&str>) -> Self {
-        match value.unwrap_or("title") {
-            "title" => Self::Title,
-            "date_title_id" => Self::DateTitleId,
-            _ => Self::Title,
-        }
-    }
-}
-
 impl Exporter {
     pub fn render_note(&self, note: &Note) -> String {
     let tags = note
@@ -155,7 +136,7 @@ impl Exporter {
     if !note.sub_notes.is_empty() {
         body.push_str("\n\n## 子笔记\n");
         for child in &note.sub_notes {
-            let child_file = note_file_name(child, self.file_name_pattern);
+            let child_file = note_file_name(child);
             body.push_str(&format!("- [[{}]]\n", child_file));
         }
     }
@@ -175,34 +156,24 @@ impl Exporter {
             sub_note_count: 0,
             sub_notes: Vec::new(),
         };
-        let parent_file = note_file_name(&parent, self.file_name_pattern);
+        let parent_file = note_file_name(&parent);
         body.push_str(&format!("\n\n---\n[[{}]]\n", parent_file));
     }
 
     format!("---\n{frontmatter}\n---\n\n{body}\n")
-    }
+}
 }
 
-fn note_file_name(note: &Note, pattern: FileNamePattern) -> String {
+fn note_file_name(note: &Note) -> String {
     let title = if note.title.trim().is_empty() {
         "未命名"
     } else {
         note.title.trim()
     };
 
-    let mut stem = sanitize_component(title);
-    if stem.is_empty() {
-        stem = "untitled".to_string();
-    }
-
-    let id = sanitize_component(&note.id);
-    match pattern {
-        FileNamePattern::Title => format!("{stem}.md"),
-        FileNamePattern::DateTitleId => {
-            let date = note_date_prefix(note);
-            format!("{date}_{stem}__{id}.md")
-        }
-    }
+    let stem = sanitize_component(title);
+    let stem = if stem.is_empty() { "untitled".to_string() } else { stem };
+    format!("{stem}.md")
 }
 
 fn note_month_dir(note: &Note) -> String {
@@ -227,12 +198,6 @@ fn note_topic_dir(note: &Note) -> String {
         .unwrap_or_else(|| "0未加入知识库".to_string())
 }
 
-fn note_date_prefix(note: &Note) -> String {
-    extract_date(&note.created_at)
-        .or_else(|| extract_date(&note.edit_time))
-        .unwrap_or_else(|| "".to_string())
-}
-
 fn extract_year_month(value: &str) -> Option<String> {
     let digits = value
         .chars()
@@ -243,23 +208,6 @@ fn extract_year_month(value: &str) -> Option<String> {
     }
 
     Some(format!("{}-{}", &digits[0..4], &digits[4..6]))
-}
-
-fn extract_date(value: &str) -> Option<String> {
-    let digits = value
-        .chars()
-        .filter(|ch| ch.is_ascii_digit())
-        .collect::<String>();
-    if digits.len() < 8 {
-        return None;
-    }
-
-    Some(format!(
-        "{}-{}-{}",
-        &digits[0..4],
-        &digits[4..6],
-        &digits[6..8]
-    ))
 }
 
 fn cleanup_empty_parents(path: &Path, export_root: &Path) {
