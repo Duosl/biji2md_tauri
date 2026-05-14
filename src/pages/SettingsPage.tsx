@@ -111,6 +111,7 @@ export function SettingsPage({
     retainedReexportUiState.dirExportConfig
   );
   const initialSnapshotReady = useRef(retainedReexportUiState.initialSnapshotReady);
+  const loadedExportConfigDir = useRef<string | null>(null);
 
   const [appVersion, setAppVersion] = useState("0.0.0");
 
@@ -212,29 +213,67 @@ export function SettingsPage({
     };
   }, []);
 
-  // 加载目录级导出配置作为初始快照（只加载一次）
+  // 导出目录切换后，重新读取该目录下的 .biji2md/config.json
   useEffect(() => {
-    if (initialSnapshotReady.current) return;
-    const dir = settings.defaultOutputDir;
-    if (!dir) return;
+    const dir = settings.defaultOutputDir?.trim();
+    if (!dir) {
+      const fallback: ExportConfigSnapshot = { exportStructure: "by_topic", linkFormat: "wikilink" };
+      setInitialExportConfig(fallback);
+      setCurrentExportConfig({ ...fallback });
+      setDirExportConfig(null);
+      initialSnapshotReady.current = false;
+      loadedExportConfigDir.current = null;
+      return;
+    }
+
+    if (initialSnapshotReady.current && loadedExportConfigDir.current === dir) {
+      return;
+    }
+
+    let cancelled = false;
+    const previousDir = loadedExportConfigDir.current;
+
     invoke<DirExportConfig>("get_dir_export_config", { exportDir: dir })
       .then((cfg) => {
+        if (cancelled) return;
         const snapshot: ExportConfigSnapshot = {
           exportStructure: normalizeExportStructure(cfg.structure),
           linkFormat: normalizeLinkFormat(cfg.linkFormat),
         };
+        const normalizedConfig: DirExportConfig = {
+          structure: snapshot.exportStructure as DirExportConfig["structure"],
+          linkFormat: snapshot.linkFormat as DirExportConfig["linkFormat"],
+        };
         setInitialExportConfig(snapshot);
         setCurrentExportConfig({ ...snapshot });
-        setDirExportConfig(cfg);
+        setDirExportConfig(normalizedConfig);
         initialSnapshotReady.current = true;
+        loadedExportConfigDir.current = dir;
+        if (previousDir && previousDir !== dir) {
+          setReexportDismissed(false);
+          setReexportResult(null);
+          setReexportProgress(null);
+          setReexportTargetDir(null);
+          setReexportPhase("hint");
+        }
       })
       .catch((error) => {
+        if (cancelled) return;
         console.error("Failed to load directory export config:", error);
         const fallback: ExportConfigSnapshot = { exportStructure: "by_topic", linkFormat: "wikilink" };
         setInitialExportConfig(fallback);
         setCurrentExportConfig({ ...fallback });
+        setDirExportConfig({
+          structure: "by_topic",
+          linkFormat: "wikilink",
+        });
         initialSnapshotReady.current = true;
+        loadedExportConfigDir.current = dir;
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [settings.defaultOutputDir]);
 
   const handleCheckUpdate = async () => {

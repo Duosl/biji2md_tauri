@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     path::Path,
     process::Command as StdCommand,
@@ -634,6 +635,122 @@ fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
     }
 }
 
+fn rebuild_cached_note_tree(cache: &CacheManager) -> (Vec<crate::types::Note>, u32) {
+    let mut notes_by_id = HashMap::new();
+    let mut child_links = Vec::new();
+    let mut invalid = 0_u32;
+
+    for raw in cache.iter() {
+        let Some(note) = crate::api::note_from_value(raw) else {
+            invalid += 1;
+            continue;
+        };
+
+        if let Some(parent_id) = note.parent_id.clone() {
+            child_links.push((note.id.clone(), parent_id));
+        }
+        notes_by_id.insert(note.id.clone(), note);
+    }
+
+    let mut children_by_parent: HashMap<String, Vec<crate::types::Note>> = HashMap::new();
+    for (child_id, parent_id) in child_links {
+        let Some(mut child) = notes_by_id.remove(&child_id) else {
+            continue;
+        };
+
+        if let Some(parent) = notes_by_id.get(&parent_id) {
+            child.parent_title = Some(parent.title.clone());
+            if child.topics.is_empty() {
+                child.topics = parent.topics.clone();
+            }
+        }
+
+        children_by_parent.entry(parent_id).or_default().push(child);
+    }
+
+    for (parent_id, children) in children_by_parent {
+        if let Some(parent) = notes_by_id.get_mut(&parent_id) {
+            parent.sub_note_count = children.len() as u32;
+            parent.sub_notes = children;
+        } else {
+            for child in children {
+                notes_by_id.insert(child.id.clone(), child);
+            }
+        }
+    }
+
+    (notes_by_id.into_values().collect(), invalid)
+}
+
+fn export_cached_note(
+    app: &AppHandle,
+    state: &Arc<std::sync::Mutex<RuntimeState>>,
+    log_manager: &SyncLog,
+    exporter: &mut crate::export::Exporter,
+    index: &mut IndexManager,
+    counters: &mut crate::types::SyncCounters,
+    processed_count: &mut u32,
+    total_expected: u32,
+    note: &crate::types::Note,
+    action: &str,
+    failure_prefix: &str,
+    progress_prefix: &str,
+    log_ts: Option<u64>,
+) {
+    *processed_count += 1;
+    let previous_file_path = index.get_file_path(&note.id);
+
+    match exporter.export_note(note, previous_file_path.as_deref()) {
+        Ok(file_name) => {
+            index.update_note_entry(note, file_name);
+            counters.created += 1;
+            let _ = app.emit(
+                "sync_item",
+                crate::types::SyncItemEvent {
+                    page_num: 1,
+                    page_index: *processed_count,
+                    processed_count: *processed_count,
+                    total_expected: Some(total_expected),
+                    note_id: note.id.clone(),
+                    title: note.title.clone(),
+                    action: action.to_string(),
+                    file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
+                    error: None,
+                },
+            );
+        }
+        Err(err) => {
+            counters.failed += 1;
+            let ts = log_ts.unwrap_or_else(crate::sync::now_millis);
+            let _ = log_manager.append(
+                ts,
+                "error",
+                &format!("{failure_prefix} [{}]: {}", note.title, err),
+            );
+            let _ = app.emit(
+                "sync_item",
+                crate::types::SyncItemEvent {
+                    page_num: 1,
+                    page_index: *processed_count,
+                    processed_count: *processed_count,
+                    total_expected: Some(total_expected),
+                    note_id: note.id.clone(),
+                    title: note.title.clone(),
+                    action: "failed".to_string(),
+                    file_path: None,
+                    error: Some(err),
+                },
+            );
+        }
+    }
+
+    update_snapshot_for_reexport(app, state, |snapshot| {
+        snapshot.processed_count = *processed_count;
+        snapshot.current_message =
+            format!("{progress_prefix}：{}/{}", *processed_count, total_expected);
+    });
+}
+
 #[tauri::command]
 pub fn get_dir_export_config(export_dir: String) -> Result<DirExportConfig, String> {
     crate::config::load_dir_export_config(std::path::Path::new(&export_dir))
@@ -863,12 +980,8 @@ async fn run_reexport(
     link_format: Option<String>,
 ) -> Result<SyncCompletedEvent, String> {
     use crate::{
-        api::note_from_value,
-        config::user_data_dir,
-        export::Exporter,
-        index::IndexManager,
-        log::SyncLog,
-        types::{Note, SyncCounters},
+        config::user_data_dir, export::Exporter, index::IndexManager, log::SyncLog,
+        types::SyncCounters,
     };
 
     let index_dir = cache_dir
@@ -888,8 +1001,11 @@ async fn run_reexport(
     let user_data = user_data_dir()?;
     let log_manager = SyncLog::open(&user_data)?;
 
+    let (notes, invalid_count) = rebuild_cached_note_tree(&cache);
     let total = cache.len() as u32;
     let mut counters = SyncCounters::default();
+    counters.failed = invalid_count;
+    let mut processed_count = invalid_count;
     let is_cancelled = || cancel_flag.load(Ordering::Relaxed);
 
     let _ = log_manager.append(
@@ -898,67 +1014,55 @@ async fn run_reexport(
         &format!("开始重导出，共 {} 条缓存笔记", total),
     );
 
-    for (idx, raw) in cache.iter().enumerate() {
+    if invalid_count > 0 {
+        let _ = log_manager.append(
+            crate::sync::now_millis(),
+            "warn",
+            &format!("重导出跳过 {} 条无法解析的缓存笔记", invalid_count),
+        );
+    }
+
+    for (idx, note) in notes.iter().enumerate() {
         if is_cancelled() {
             break;
         }
 
-        let note: Option<Note> = note_from_value(raw);
-        let Some(note) = note else {
-            counters.failed += 1;
-            continue;
-        };
-
-        let previous_file_path = index.get_file_path(&note.id);
-        match exporter.export_note(&note, previous_file_path.as_deref()) {
-            Ok(file_name) => {
-                index.update_note_entry(&note, file_name);
-                counters.created += 1;
-            }
-            Err(err) => {
-                counters.failed += 1;
-                let _ = log_manager.append(
-                    crate::sync::now_millis(),
-                    "error",
-                    &format!("重导出失败 [{}]: {}", note.title, err),
-                );
-                let _ = app.emit(
-                    "sync_item",
-                    crate::types::SyncItemEvent {
-                        page_num: 1,
-                        page_index: idx as u32,
-                        processed_count: idx as u32 + 1,
-                        total_expected: Some(total),
-                        note_id: note.id.clone(),
-                        title: note.title.clone(),
-                        action: "failed".to_string(),
-                        file_path: None,
-                        error: Some(err),
-                    },
-                );
-                continue;
-            }
-        }
-
-        let _ = app.emit(
-            "sync_item",
-            crate::types::SyncItemEvent {
-                page_num: 1,
-                page_index: idx as u32,
-                processed_count: idx as u32 + 1,
-                total_expected: Some(total),
-                note_id: note.id.clone(),
-                title: note.title.clone(),
-                action: "created".to_string(),
-                file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
-                error: None,
-            },
+        export_cached_note(
+            &app,
+            &state,
+            &log_manager,
+            &mut exporter,
+            &mut index,
+            &mut counters,
+            &mut processed_count,
+            total,
+            note,
+            "created",
+            "重导出失败",
+            "重导出进度",
+            None,
         );
 
-        update_snapshot_for_reexport(&app, &state, |snapshot| {
-            snapshot.processed_count = idx as u32 + 1;
-            snapshot.current_message = format!("重导出进度：{}/{}", idx + 1, total);
-        });
+        for child in &note.sub_notes {
+            if is_cancelled() {
+                break;
+            }
+            export_cached_note(
+                &app,
+                &state,
+                &log_manager,
+                &mut exporter,
+                &mut index,
+                &mut counters,
+                &mut processed_count,
+                total,
+                child,
+                "sub_created",
+                "重导出失败",
+                "重导出进度",
+                None,
+            );
+        }
 
         if idx % 10 == 0 && idx > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -1005,12 +1109,11 @@ async fn run_reexport_safe(
     link_format: Option<String>,
 ) -> Result<SyncCompletedEvent, String> {
     use crate::{
-        api::note_from_value,
         config::{app_cache_dir, user_data_dir},
         export::Exporter,
         index::IndexManager,
         log::SyncLog,
-        types::{Note, SyncCounters},
+        types::SyncCounters,
     };
 
     let temp_root = app_cache_dir(&app)?;
@@ -1044,8 +1147,11 @@ async fn run_reexport_safe(
     let user_data = user_data_dir()?;
     let log_manager = SyncLog::open(&user_data)?;
 
+    let (notes, invalid_count) = rebuild_cached_note_tree(&cache);
     let total = cache.len() as u32;
     let mut counters = SyncCounters::default();
+    counters.failed = invalid_count;
+    let mut processed_count = invalid_count;
     let is_cancelled = || cancel_flag.load(Ordering::Relaxed);
 
     let _ = log_manager.append(
@@ -1058,7 +1164,15 @@ async fn run_reexport_safe(
         ),
     );
 
-    for (idx, raw) in cache.iter().enumerate() {
+    if invalid_count > 0 {
+        let _ = log_manager.append(
+            ts,
+            "warn",
+            &format!("安全重导出跳过 {} 条无法解析的缓存笔记", invalid_count),
+        );
+    }
+
+    for (idx, note) in notes.iter().enumerate() {
         if is_cancelled() {
             let _ = log_manager.append(ts, "warn", "安全重导出已取消，清理临时目录");
             cleanup_temp()?;
@@ -1073,62 +1187,42 @@ async fn run_reexport_safe(
             });
         }
 
-        let note: Option<Note> = note_from_value(raw);
-        let Some(note) = note else {
-            counters.failed += 1;
-            continue;
-        };
-
-        let previous_file_path = index.get_file_path(&note.id);
-        match exporter.export_note(&note, previous_file_path.as_deref()) {
-            Ok(file_name) => {
-                index.update_note_entry(&note, file_name);
-                counters.created += 1;
-            }
-            Err(err) => {
-                counters.failed += 1;
-                let _ = log_manager.append(
-                    ts,
-                    "error",
-                    &format!("安全重导出失败 [{}]: {}", note.title, err),
-                );
-                let _ = app.emit(
-                    "sync_item",
-                    crate::types::SyncItemEvent {
-                        page_num: 1,
-                        page_index: idx as u32,
-                        processed_count: idx as u32 + 1,
-                        total_expected: Some(total),
-                        note_id: note.id.clone(),
-                        title: note.title.clone(),
-                        action: "failed".to_string(),
-                        file_path: None,
-                        error: Some(err),
-                    },
-                );
-                continue;
-            }
-        }
-
-        let _ = app.emit(
-            "sync_item",
-            crate::types::SyncItemEvent {
-                page_num: 1,
-                page_index: idx as u32,
-                processed_count: idx as u32 + 1,
-                total_expected: Some(total),
-                note_id: note.id.clone(),
-                title: note.title.clone(),
-                action: "created".to_string(),
-                file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
-                error: None,
-            },
+        export_cached_note(
+            &app,
+            &state,
+            &log_manager,
+            &mut exporter,
+            &mut index,
+            &mut counters,
+            &mut processed_count,
+            total,
+            note,
+            "created",
+            "安全重导出失败",
+            "安全重导出进度",
+            Some(ts),
         );
 
-        update_snapshot_for_reexport(&app, &state, |snapshot| {
-            snapshot.processed_count = idx as u32 + 1;
-            snapshot.current_message = format!("安全重导出进度：{}/{}", idx + 1, total);
-        });
+        for child in &note.sub_notes {
+            if is_cancelled() {
+                break;
+            }
+            export_cached_note(
+                &app,
+                &state,
+                &log_manager,
+                &mut exporter,
+                &mut index,
+                &mut counters,
+                &mut processed_count,
+                total,
+                child,
+                "sub_created",
+                "安全重导出失败",
+                "安全重导出进度",
+                Some(ts),
+            );
+        }
 
         if idx % 10 == 0 && idx > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
