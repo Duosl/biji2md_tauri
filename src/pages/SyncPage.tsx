@@ -211,8 +211,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
 
     await startSync({
       exportDir: settings.defaultOutputDir || "",
-      mode,
-      pageSize: settings.defaultPageSize || 100
+      mode
     });
   };
 

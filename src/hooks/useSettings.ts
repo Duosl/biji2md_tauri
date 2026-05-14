@@ -163,9 +163,6 @@ export function useSettings() {
       if (input.defaultOutputDir !== undefined && input.defaultOutputDir !== null) {
         promises.push(saveField("defaultOutputDir", input.defaultOutputDir));
       }
-      if (input.defaultPageSize !== undefined) {
-        promises.push(saveField("defaultPageSize", input.defaultPageSize));
-      }
       if (input.showSyncTips !== undefined) {
         promises.push(saveField("showSyncTips", input.showSyncTips));
       }

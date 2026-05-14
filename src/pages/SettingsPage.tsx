@@ -107,7 +107,6 @@ export function SettingsPage({
   // 本地编辑状态（用于输入框）
   const [localValues, setLocalValues] = useState({
     defaultOutputDir: "",
-    defaultPageSize: 100,
   });
   const [showToken, setShowToken] = useState(false);
 
@@ -250,7 +249,6 @@ export function SettingsPage({
   useEffect(() => {
     setLocalValues({
       defaultOutputDir: settings.defaultOutputDir || "",
-      defaultPageSize: settings.defaultPageSize || 100,
     });
   }, [settings]);
 
@@ -282,14 +280,6 @@ export function SettingsPage({
   // 目录清空
   const handleClearDir = async () => {
     await saveField("defaultOutputDir", "");
-  };
-
-  // 分页大小变更（失焦时保存）
-  const handlePageSizeBlur = () => {
-    const num = Number(localValues.defaultPageSize);
-    if (!isNaN(num) && num > 0 && num !== settings.defaultPageSize) {
-      saveField("defaultPageSize", num);
-    }
   };
 
   // Token 保存
@@ -512,22 +502,6 @@ export function SettingsPage({
               </button>
             )}
           </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">
-            默认分页大小
-            {renderFieldStatus("defaultPageSize")}
-          </label>
-          <input
-            className="text-field"
-            type="number"
-            min={1}
-            value={localValues.defaultPageSize}
-            onChange={(e) => setLocalValues(prev => ({ ...prev, defaultPageSize: Number(e.target.value) }))}
-            onBlur={handlePageSizeBlur}
-            style={{ width: 120 }}
-          />
         </div>
 
         <div className="form-group">

@@ -217,13 +217,11 @@ export function useSync() {
 
   const saveSettings = async (params: {
     defaultOutputDir?: string;
-    defaultPageSize?: number;
     lastMode?: "incremental" | "full";
   }) => {
     await invoke<Settings>("save_settings", {
       input: {
         defaultOutputDir: params.defaultOutputDir ?? settings.defaultOutputDir,
-        defaultPageSize: params.defaultPageSize ?? settings.defaultPageSize,
         lastMode: params.lastMode ?? settings.lastMode
       }
     });
@@ -233,7 +231,6 @@ export function useSync() {
   const startSync = async (params: {
     exportDir: string;
     mode: "incremental" | "full";
-    pageSize: number;
   }) => {
     console.log("[DEBUG] startSync hook called");
     setSummary(null);
@@ -246,7 +243,7 @@ export function useSync() {
       await invoke<Settings>("save_settings", {
         input: {
           defaultOutputDir: params.exportDir,
-          defaultPageSize: params.pageSize
+          lastMode: params.mode
         }
       });
       console.log("[DEBUG] startSync: save_settings returned");
@@ -259,8 +256,7 @@ export function useSync() {
       await invoke("start_sync", {
         request: {
           exportDir: params.exportDir,
-          syncMode: params.mode,
-          pageSize: params.pageSize
+          syncMode: params.mode
         }
       });
       console.log("[DEBUG] startSync: start_sync command returned");

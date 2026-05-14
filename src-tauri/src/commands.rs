@@ -85,7 +85,6 @@ pub fn save_settings(input: SaveSettingsInput) -> Result<AppSettings, String> {
     config.default_output_dir = input
         .default_output_dir
         .filter(|value| !value.trim().is_empty());
-    config.default_page_size = Some(input.default_page_size.unwrap_or(100).max(1));
     config.last_mode = input.last_mode;
 
     if let Some(show_sync_tips) = input.show_sync_tips {
@@ -114,11 +113,6 @@ pub fn save_setting_field(input: SaveSettingFieldInput) -> Result<AppSettings, S
                 } else {
                     Some(dir.to_string())
                 };
-            }
-        }
-        "defaultPageSize" => {
-            if let Some(num) = input.value.as_u64() {
-                config.default_page_size = Some(num.max(1) as u32);
             }
         }
         "showSyncTips" => {
@@ -182,7 +176,7 @@ pub async fn start_sync(
     eprintln!("[DEBUG] start_sync called");
 
     // 原子性地检查和设置运行状态，防止竞态条件
-    let (export_dir, page_size, mode, token) = {
+    let (export_dir, mode, token) = {
         let mut guard = state
             .inner
             .lock()
@@ -207,11 +201,7 @@ pub async fn start_sync(
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| "缺少导出目录。请先选择导出目录。".to_string())?;
         ensure_export_dir_writable(&export_dir)?;
-        let page_size = request
-            .page_size
-            .or(config.default_page_size)
-            .unwrap_or(100)
-            .max(1);
+        let page_size = 100;
         let mode = request
             .sync_mode
             .clone()
@@ -239,7 +229,7 @@ pub async fn start_sync(
             counters: Default::default(),
         };
 
-        (export_dir, page_size, mode, token)
+        (export_dir, mode, token)
     };
 
     eprintln!("[DEBUG] start_sync spawning workflow");
@@ -249,7 +239,7 @@ pub async fn start_sync(
     let request = StartSyncRequest {
         export_dir: Some(export_dir.clone()),
         sync_mode: Some(mode.clone()),
-        page_size: Some(page_size),
+        page_size: Some(100),
     };
 
     // 将所有耗时操作移到异步任务中，避免阻塞命令返回
@@ -275,7 +265,6 @@ async fn run_sync_workflow(
         .export_dir
         .clone()
         .ok_or_else(|| "缺少导出目录。".to_string())?;
-    let page_size = request.page_size.unwrap_or(100);
     let mode = request
         .sync_mode
         .clone()
@@ -285,7 +274,7 @@ async fn run_sync_workflow(
     let _ = emit_sync_state(&app, &state);
 
     // 保存配置
-    let _ = save_sync_config(&export_dir, page_size, &mode);
+    let _ = save_sync_config(&export_dir, &mode);
 
     // 执行同步
     run_sync(app, state, request, token).await;
@@ -310,10 +299,9 @@ fn emit_sync_state(
 }
 
 // 辅助函数：保存同步配置
-fn save_sync_config(export_dir: &str, page_size: u32, mode: &str) -> Result<(), String> {
+fn save_sync_config(export_dir: &str, mode: &str) -> Result<(), String> {
     let mut config = load_config()?;
     config.default_output_dir = Some(export_dir.to_string());
-    config.default_page_size = Some(page_size);
     config.last_mode = Some(mode.to_string());
     save_config(&config)
 }

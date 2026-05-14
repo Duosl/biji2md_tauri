@@ -52,7 +52,7 @@ async fn run_sync_inner(
         .clone()
         .ok_or_else(|| "缺少导出目录。请先选择导出目录。".to_string())?;
     let mode = SyncMode::from_optional(request.sync_mode.as_deref());
-    let page_size = request.page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
+    let page_size = DEFAULT_PAGE_SIZE;
 
     let user_data = user_data_dir()?;
     let cache_dir = app_cache_dir(app)?;
