@@ -36,6 +36,7 @@ pub fn run() {
             commands::get_sync_logs,
             commands::get_cache_info,
             commands::reexport_from_cache,
+            commands::reexport_from_cache_safe,
             commands::open_log_dir
         ])
         .run(tauri::generate_context!())

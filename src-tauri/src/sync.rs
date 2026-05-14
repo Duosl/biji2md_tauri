@@ -13,7 +13,7 @@ use tokio::time::sleep;
 use crate::{
     api::ApiClient,
     cache::CacheManager,
-    config::{app_cache_dir, load_config, user_data_dir},
+    config::{app_cache_dir, user_data_dir},
     export::Exporter,
     history::HistoryManager,
     index::IndexManager,
@@ -75,13 +75,13 @@ async fn run_sync_inner(
         "info",
         &format!("输出目录：{export_dir}"),
     )?;
-    let config = load_config()?;
     let client = ApiClient::new(&token)?;
     let mut cache = CacheManager::load().unwrap_or_default();
     let mut index = IndexManager::load(&cache_dir)?;
+    let dir_config = crate::config::load_dir_export_config(Path::new(&export_dir))?;
     let mut exporter = Exporter::new(
         &export_dir,
-        config.export_structure.as_deref(),
+        Some(&dir_config.structure),
     )?;
     let previous_last_note_id = index.get_last_note_id();
     let last_sync_at = index.get_last_sync_at();

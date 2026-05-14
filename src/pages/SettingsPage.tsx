@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../hooks/useSettings";
 import { useCache } from "../hooks/useCache";
 import type { UpdateState } from "../hooks/useUpdater";
+import type { DirExportConfig } from "../types";
 import logoUrl from "../assets/ic_logo.svg";
 
 type SettingsPageProps = {
@@ -40,16 +41,19 @@ export function SettingsPage({
     cacheInfo,
     reexporting,
     loadCacheInfo,
-    reexportFromCache
+    reexportFromCache,
+    reexportSafe,
   } = useCache();
 
   const [reexportDismissed, setReexportDismissed] = useState(false);
   const [reexportResult, setReexportResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [reexportPhase, setReexportPhase] = useState<"hint" | "choice" | "picking" | "progress">("hint");
 
   // 导出配置变更检测：初始快照 vs 当前值
   type ExportConfigSnapshot = Record<string, string | undefined>;
   const [initialExportConfig, setInitialExportConfig] = useState<ExportConfigSnapshot>({});
   const [currentExportConfig, setCurrentExportConfig] = useState<ExportConfigSnapshot>({});
+  const [dirExportConfig, setDirExportConfig] = useState<DirExportConfig | null>(null);
   const initialSnapshotReady = useRef(false);
 
   const [appVersion, setAppVersion] = useState("0.0.0");
@@ -68,14 +72,26 @@ export function SettingsPage({
     loadCacheInfo();
   }, []);
 
-  // 页面加载时记录导出配置初始快照，用于变更检测（只记录一次）
+  // 加载目录级导出配置作为初始快照（只加载一次）
   useEffect(() => {
-    if (!settings.exportStructure || initialSnapshotReady.current) return;
-    const snapshot: ExportConfigSnapshot = { exportStructure: settings.exportStructure };
-    setInitialExportConfig(snapshot);
-    setCurrentExportConfig({ ...snapshot });
-    initialSnapshotReady.current = true;
-  }, [settings.exportStructure]);
+    if (initialSnapshotReady.current) return;
+    const dir = settings.defaultOutputDir;
+    if (!dir) return;
+    invoke<DirExportConfig>("get_dir_export_config", { exportDir: dir })
+      .then((cfg) => {
+        const snapshot: ExportConfigSnapshot = { exportStructure: cfg.structure };
+        setInitialExportConfig(snapshot);
+        setCurrentExportConfig({ ...snapshot });
+        setDirExportConfig(cfg);
+        initialSnapshotReady.current = true;
+      })
+      .catch(() => {
+        const fallback: ExportConfigSnapshot = { exportStructure: "by_topic" };
+        setInitialExportConfig(fallback);
+        setCurrentExportConfig({ ...fallback });
+        initialSnapshotReady.current = true;
+      });
+  }, [settings.defaultOutputDir]);
 
   const handleCheckUpdate = async () => {
     console.log("[DEBUG] settings update check request:", {
@@ -156,21 +172,59 @@ export function SettingsPage({
     await clearToken();
   };
 
-  const handleExportConfigChange = async (key: string, value: string) => {
-    await saveField(key as any, value);
+  const handleExportConfigChange = (key: string, value: string) => {
     setCurrentExportConfig((prev) => ({ ...prev, [key]: value }));
     setReexportDismissed(false);
   };
 
   const handleReexport = async () => {
     setReexportResult(null);
-    const result = await reexportFromCache();
+    setReexportPhase("choice");
+  };
+
+  const handlePickNewDir = async () => {
+    setReexportPhase("picking");
+    try {
+      const selected = await selectExportDir();
+      if (!selected) {
+        setReexportPhase("choice");
+        return;
+      }
+      await saveField("defaultOutputDir" as any, selected);
+      setReexportResult(null);
+      setReexportPhase("progress");
+      const structure = currentExportConfig.exportStructure;
+      const result = await reexportFromCache(selected, structure);
+      handleReexportResult(result);
+    } catch (e) {
+      setReexportPhase("choice");
+    }
+  };
+
+  const handleSafeReexport = async () => {
+    setReexportResult(null);
+    setReexportPhase("progress");
+    const structure = currentExportConfig.exportStructure;
+    const result = await reexportSafe(structure);
+    handleReexportResult(result);
+  };
+
+  const handleReexportCancel = () => {
+    setReexportPhase("hint");
+  };
+
+  const handleReexportResult = (result: { success: boolean; error?: string }) => {
     if (result.success) {
       setReexportResult({ type: "success", message: "重新导出完成" });
-      setTimeout(() => setReexportResult(null), 3000);
+      setInitialExportConfig({ ...currentExportConfig });
+      setTimeout(() => {
+        setReexportResult(null);
+        setReexportPhase("hint");
+      }, 3000);
     } else {
       setReexportResult({ type: "error", message: result.error || "重导出失败" });
       setTimeout(() => setReexportResult(null), 6000);
+      setReexportPhase("choice");
     }
   };
 
@@ -295,7 +349,6 @@ export function SettingsPage({
         <div className="form-group">
           <label className="form-label">
             导出目录结构
-            {renderFieldStatus("exportStructure")}
           </label>
           <div className="radio-group">
             <label className="radio-item">
@@ -303,8 +356,8 @@ export function SettingsPage({
                 type="radio"
                 name="exportStructure"
                 value="by_topic"
-                checked={settings.exportStructure === "by_topic"}
-                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
+                checked={currentExportConfig.exportStructure === "by_topic"}
+                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>按知识库分组</span>
             </label>
@@ -313,8 +366,8 @@ export function SettingsPage({
                 type="radio"
                 name="exportStructure"
                 value="by_month"
-                checked={settings.exportStructure === "by_month"}
-                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
+                checked={currentExportConfig.exportStructure === "by_month"}
+                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>按月份分组</span>
             </label>
@@ -323,8 +376,8 @@ export function SettingsPage({
                 type="radio"
                 name="exportStructure"
                 value="by_tag"
-                checked={settings.exportStructure === "by_tag"}
-                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
+                checked={currentExportConfig.exportStructure === "by_tag"}
+                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>按主标签分组</span>
             </label>
@@ -333,8 +386,8 @@ export function SettingsPage({
                 type="radio"
                 name="exportStructure"
                 value="flat"
-                checked={settings.exportStructure === "flat"}
-                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
+                checked={currentExportConfig.exportStructure === "flat"}
+                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>平铺（所有文件在同一目录）</span>
             </label>
@@ -349,38 +402,85 @@ export function SettingsPage({
 
           const isRetry = reexportResult?.type === "error";
 
-          return (
-            <div className="reexport-hint">
-              <div className="reexport-hint-body">
-                <p className="reexport-hint-text">
-                  <strong>导出目录结构</strong>已变更，是否需要重新导出所有笔记以适配新的目录结构？
-                </p>
+          if (reexportPhase === "hint") {
+            return (
+              <div className="reexport-hint" onClick={handleReexport}>
+                <div className="reexport-hint-body">
+                  <p className="reexport-hint-text">
+                    检测到你正在修改<strong>导出目录结构</strong>，是否重新导出笔记以适配新的目录结构？
+                  </p>
+                </div>
+                <div className="reexport-hint-actions">
+                  <button className="btn btn-secondary btn-sm">重新导出</button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={(e) => { e.stopPropagation(); setCurrentExportConfig({ ...initialExportConfig }); setReexportDismissed(true); }}
+                  >
+                    不改了
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (reexportPhase === "choice") {
+            return (
+              <div className="reexport-hint reexport-choice">
+                <div className="reexport-option" onClick={handlePickNewDir}>
+                  <span className="reexport-option-icon"></span>
+                  <div className="reexport-option-body">
+                    <p className="reexport-option-title">1. 导出到新目录（推荐）</p>
+                    <p className="reexport-option-desc">导出到新目录，与当前目录互相隔离，不受影响当前目录结构</p>
+                  </div>
+                  <span className="reexport-option-action">选择目录</span>
+                </div>
+                <div className="reexport-option" onClick={handleSafeReexport}>
+                  <span className="reexport-option-icon"></span>
+                  <div className="reexport-option-body">
+                    <p className="reexport-option-title">2. 在当前目录重新导出</p>
+                    <p className="reexport-option-desc">在当前目录重新导出所有笔记</p>
+                  </div>
+                  <span className="reexport-option-action">开始重导出</span>
+                </div>
                 {reexportResult && (
                   <span className={`reexport-hint-result ${reexportResult.type}`}>
                     {reexportResult.type === "success" ? "✓ " : "✕ "}
                     {reexportResult.message}
                   </span>
                 )}
+                <div className="reexport-choice-footer">
+                  <button className="btn btn-ghost btn-sm" onClick={handleReexportCancel}>取消</button>
+                </div>
               </div>
-              <div className="reexport-hint-actions">
-                <button
-                  className={`btn btn-sm ${isRetry ? "btn-danger" : "btn-secondary"}`}
-                  onClick={handleReexport}
-                  disabled={reexporting}
-                >
-                  {reexporting ? "正在导出..." : isRetry ? "再次尝试" : "重新导出"}
-                </button>
-                {!reexporting && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setReexportDismissed(true)}
-                  >
-                    先不用了
-                  </button>
-                )}
+            );
+          }
+
+          if (reexportPhase === "picking") {
+            return (
+              <div className="reexport-hint">
+                <div className="reexport-hint-body">
+                  <p className="reexport-hint-text">请选择新的导出目录...</p>
+                </div>
               </div>
-            </div>
-          );
+            );
+          }
+
+          if (reexportPhase === "progress") {
+            return (
+              <div className="reexport-hint">
+                <div className="reexport-hint-body">
+                  <p className="reexport-hint-text">
+                    正在重新导出笔记
+                    {cacheInfo?.totalCount ? (
+                      <span className="reexport-progress-hint">（共 {cacheInfo.totalCount} 条）</span>
+                    ) : null}...
+                  </p>
+                </div>
+              </div>
+            );
+          }
+
+          return null;
         })()}
 
       </section>

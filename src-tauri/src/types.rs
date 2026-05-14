@@ -145,9 +145,6 @@ pub struct SaveSettingsInput {
     pub default_page_size: Option<u32>,
     #[serde(default)]
     pub last_mode: Option<String>,
-    // 导出偏好设置
-    #[serde(default)]
-    pub export_structure: Option<String>,
     #[serde(default)]
     pub file_name_pattern: Option<String>,
     #[serde(default)]
@@ -199,8 +196,6 @@ pub struct AppSettings {
     pub default_output_dir: Option<String>,
     pub default_page_size: u32,
     pub last_mode: String,
-    // 导出偏好设置
-    pub export_structure: String,
     pub file_name_pattern: String,
     pub show_sync_tips: bool,
 }

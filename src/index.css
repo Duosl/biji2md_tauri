@@ -429,6 +429,66 @@ textarea {
   gap: 8px;
 }
 
+.reexport-choice {
+  padding: 4px;
+}
+
+.reexport-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.reexport-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.reexport-option-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.reexport-option-body {
+  min-width: 0;
+}
+
+.reexport-option-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.reexport-option-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.reexport-option-action {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.reexport-choice-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+}
+
+.reexport-progress-hint {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 /* 关于/更新 */
 .section-meta {
   padding-top: 22px;

@@ -4,6 +4,8 @@ use dirs::config_dir;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
+pub const DEFAULT_EXPORT_STRUCTURE: &str = "by_topic";
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     #[serde(default)]
@@ -14,11 +16,18 @@ pub struct AppConfig {
     pub default_page_size: Option<u32>,
     #[serde(default)]
     pub last_mode: Option<String>,
-    // 导出偏好设置
-    #[serde(default)]
-    pub export_structure: Option<String>, // flat, by_month, by_tag, by_topic
     #[serde(default)]
     pub show_sync_tips: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DirExportConfig {
+    #[serde(default = "default_structure")]
+    pub structure: String,
+}
+
+fn default_structure() -> String {
+    DEFAULT_EXPORT_STRUCTURE.to_string()
 }
 
 // ~/.biji2md/
@@ -124,4 +133,32 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 pub fn config_file_path() -> Result<PathBuf, String> {
     let dir = user_data_dir()?;
     Ok(dir.join("config.json"))
+}
+
+// {export_dir}/.biji2md/config.json
+pub fn dir_export_config_path(export_dir: &Path) -> PathBuf {
+    export_dir.join(".biji2md").join("config.json")
+}
+
+pub fn load_dir_export_config(export_dir: &Path) -> Result<DirExportConfig, String> {
+    let path = dir_export_config_path(export_dir);
+    if !path.exists() {
+        return Ok(DirExportConfig::default());
+    }
+    let raw = fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read dir export config: {e}"))?;
+    serde_json::from_str::<DirExportConfig>(&raw)
+        .map_err(|e| format!("failed to parse dir export config: {e}"))
+}
+
+pub fn save_dir_export_config(export_dir: &Path, config: &DirExportConfig) -> Result<(), String> {
+    let path = dir_export_config_path(export_dir);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create .biji2md directory: {e}"))?;
+    }
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("failed to serialize dir export config: {e}"))?;
+    fs::write(&path, content)
+        .map_err(|e| format!("failed to write dir export config: {e}"))
 }

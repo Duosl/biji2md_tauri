@@ -9,8 +9,6 @@ export type Settings = {
   defaultOutputDir?: string | null;
   defaultPageSize: number;
   lastMode: "incremental" | "full" | string;
-  // 导出偏好设置
-  exportStructure: "flat" | "by_month" | "by_tag" | "by_topic";
   showSyncTips: boolean;
 };
 
@@ -129,4 +127,9 @@ export type CacheInfo = {
   totalCount: number;
   cachedAt?: number | null;
   fileSizeBytes?: number | null;
+};
+
+// 目录级导出配置（存储于 {exportDir}/.biji2md/config.json）
+export type DirExportConfig = {
+  structure: "flat" | "by_month" | "by_tag" | "by_topic";
 };

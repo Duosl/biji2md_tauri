@@ -19,12 +19,12 @@ export function useCache() {
     }
   });
 
-  const reexportFromCache = async (): Promise<{ success: boolean; error?: string }> => {
+  const reexportFromCache = async (targetDir?: string, structure?: string): Promise<{ success: boolean; error?: string }> => {
     if (reexporting) return { success: false, error: "正在重导出" };
 
     setReexporting(true);
     try {
-      await invoke("reexport_from_cache");
+      await invoke("reexport_from_cache", { exportDir: targetDir, structure });
       return { success: true };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -34,5 +34,20 @@ export function useCache() {
     }
   };
 
-  return { cacheInfo, reexporting, loadCacheInfo, reexportFromCache };
+  const reexportSafe = async (structure?: string): Promise<{ success: boolean; error?: string }> => {
+    if (reexporting) return { success: false, error: "正在重导出" };
+
+    setReexporting(true);
+    try {
+      await invoke("reexport_from_cache_safe", { structure });
+      return { success: true };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { success: false, error: message };
+    } finally {
+      setReexporting(false);
+    }
+  };
+
+  return { cacheInfo, reexporting, loadCacheInfo, reexportFromCache, reexportSafe };
 }

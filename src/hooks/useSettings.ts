@@ -22,7 +22,6 @@ export function useSettings() {
     defaultOutputDir: "",
     defaultPageSize: 100,
     lastMode: "incremental",
-    exportStructure: "by_topic",
     showSyncTips: true
   });
 
@@ -166,9 +165,6 @@ export function useSettings() {
       }
       if (input.defaultPageSize !== undefined) {
         promises.push(saveField("defaultPageSize", input.defaultPageSize));
-      }
-      if (input.exportStructure !== undefined) {
-        promises.push(saveField("exportStructure", input.exportStructure));
       }
       if (input.showSyncTips !== undefined) {
         promises.push(saveField("showSyncTips", input.showSyncTips));
