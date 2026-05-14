@@ -33,11 +33,10 @@ pub async fn run_sync(
     request: StartSyncRequest,
     token: String,
 ) {
-    let export_dir = request.export_dir.clone();
     match run_sync_inner(&app, &state, request, token).await {
         Ok(()) => {}
         Err(message) => {
-            set_failed(&app, &state, export_dir.as_deref(), &message);
+            set_failed(&app, &state, &message);
         }
     }
 }
@@ -701,7 +700,6 @@ where
 fn set_failed(
     app: &AppHandle,
     state: &Arc<Mutex<RuntimeState>>,
-    export_dir: Option<&str>,
     message: &str,
 ) {
     let finished_at = now_millis();
@@ -714,8 +712,8 @@ fn set_failed(
         guard.cancel_flag = None;
     }
 
-    if let Some(dir) = export_dir {
-        if let Ok(log_manager) = SyncLog::open(dir) {
+    if let Ok(user_data) = user_data_dir() {
+        if let Ok(log_manager) = SyncLog::open(&user_data) {
             let _ = emit_log(app, &log_manager, "error", message);
         }
     }

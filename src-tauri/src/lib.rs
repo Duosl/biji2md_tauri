@@ -34,6 +34,7 @@ pub fn run() {
             commands::cancel_sync,
             commands::start_sync,
             commands::get_sync_logs,
+            commands::get_dir_export_config,
             commands::get_cache_info,
             commands::reexport_from_cache,
             commands::reexport_from_cache_safe,

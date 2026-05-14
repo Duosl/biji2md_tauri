@@ -430,7 +430,7 @@ textarea {
 }
 
 .reexport-choice {
-  padding: 4px;
+  padding: 8px;
 }
 
 .reexport-option {
@@ -446,6 +446,10 @@ textarea {
 
 .reexport-option:hover {
   background: rgba(0, 0, 0, 0.04);
+}
+
+.reexport-option + .reexport-option {
+  margin-top: 4px;
 }
 
 .reexport-option-icon {
@@ -481,12 +485,73 @@ textarea {
 .reexport-choice-footer {
   display: flex;
   justify-content: center;
-  padding-top: 6px;
+  padding-top: 10px;
 }
 
 .reexport-progress-hint {
   color: var(--text-muted);
   font-weight: 400;
+}
+
+.reexport-result {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  margin: 12px 8px 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.reexport-result-error {
+  border-color: rgba(220, 38, 38, 0.22);
+  background: rgba(220, 38, 38, 0.055);
+}
+
+.reexport-result-success {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: rgba(22, 163, 74, 0.06);
+}
+
+.reexport-result-badge {
+  min-width: 38px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.reexport-result-error .reexport-result-badge {
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.reexport-result-success .reexport-result-badge {
+  color: var(--success);
+  background: rgba(22, 163, 74, 0.1);
+}
+
+.reexport-result-body {
+  min-width: 0;
+}
+
+.reexport-result-body strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reexport-result-body p {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 /* 关于/更新 */
@@ -1347,6 +1412,10 @@ textarea {
   background: var(--bg-tertiary);
 }
 
+.radio-item.active {
+  background: var(--bg-tertiary);
+}
+
 .radio-item input[type="radio"] {
   width: 16px;
   height: 16px;
@@ -1355,6 +1424,11 @@ textarea {
 
 .radio-item span {
   color: var(--text-secondary);
+}
+
+.radio-item.active span {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* 复选框 */

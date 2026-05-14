@@ -845,16 +845,17 @@ async fn run_reexport(
 ) -> Result<SyncCompletedEvent, String> {
     use crate::{
         api::note_from_value,
+        config::user_data_dir,
         export::Exporter,
         index::IndexManager,
         log::SyncLog,
         types::{Note, SyncCounters},
     };
 
-    let index_path = cache_dir
+    let index_dir = cache_dir
         .as_ref()
-        .map(|path| path.join("index.json"))
-        .unwrap_or_else(|| std::path::PathBuf::from(&export_dir).join("index.json"));
+        .cloned()
+        .unwrap_or_else(|| std::path::PathBuf::from(&export_dir));
 
     let dir_config = crate::config::load_dir_export_config(std::path::Path::new(&export_dir))?;
     let effective_structure = structure.unwrap_or_else(|| dir_config.structure);
@@ -862,8 +863,9 @@ async fn run_reexport(
         &export_dir,
         Some(&effective_structure),
     )?;
-    let mut index = IndexManager::load(&index_path)?;
-    let log_manager = SyncLog::open(&export_dir)?;
+    let mut index = IndexManager::load(&index_dir)?;
+    let user_data = user_data_dir()?;
+    let log_manager = SyncLog::open(&user_data)?;
 
     let total = cache.len() as u32;
     let mut counters = SyncCounters::default();
@@ -971,7 +973,7 @@ async fn run_reexport_safe(
 ) -> Result<SyncCompletedEvent, String> {
     use crate::{
         api::note_from_value,
-        config::app_cache_dir,
+        config::{app_cache_dir, user_data_dir},
         export::Exporter,
         index::IndexManager,
         log::SyncLog,
@@ -1000,8 +1002,13 @@ async fn run_reexport_safe(
         &temp_dir,
         Some(&effective_structure),
     )?;
-    let mut index = IndexManager::load(&cache_dir.as_ref().map(|p| p.join("index.json")).unwrap_or_else(|| std::path::PathBuf::from(&export_dir).join("index.json")))?;
-    let log_manager = SyncLog::open(&export_dir)?;
+    let index_dir = cache_dir
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(|| std::path::PathBuf::from(&export_dir));
+    let mut index = IndexManager::load(&index_dir)?;
+    let user_data = user_data_dir()?;
+    let log_manager = SyncLog::open(&user_data)?;
 
     let total = cache.len() as u32;
     let mut counters = SyncCounters::default();

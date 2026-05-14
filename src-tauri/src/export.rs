@@ -26,8 +26,18 @@ impl Exporter {
         structure: Option<&str>,
     ) -> Result<Self, String> {
         let export_dir = export_dir.as_ref().to_path_buf();
-        fs::create_dir_all(&export_dir)
-            .map_err(|error| format!("failed to create export directory: {error}"))?;
+        if export_dir.exists() && !export_dir.is_dir() {
+            return Err(format!(
+                "导出路径不是目录: {}",
+                export_dir.display()
+            ));
+        }
+        match fs::create_dir_all(&export_dir) {
+            Ok(()) => {}
+            Err(e) => {
+                return Err(format!("failed to create export directory: {e}"));
+            }
+        }
 
         Ok(Self {
             export_dir,
@@ -63,6 +73,7 @@ impl Exporter {
         let content = self.render_note(note);
 
         if let Some(parent) = file_path.parent() {
+            eprintln!("[DEBUG-EXPORT] export_note create_dir_all: {} (exists={}, is_dir={})", parent.display(), parent.exists(), parent.exists() && parent.is_dir());
             fs::create_dir_all(parent)
                 .map_err(|error| format!("failed to create markdown parent directory: {error}"))?;
         }

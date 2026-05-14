@@ -50,6 +50,10 @@ const emptySnapshot: SyncSnapshot = {
   }
 };
 
+function isCacheReexportMode(mode?: string | null) {
+  return mode === "cache_reexport" || mode === "cache_reexport_safe";
+}
+
 export function useSync() {
   const [settings, setSettings] = useState<Settings>({
     hasToken: false,
@@ -72,6 +76,7 @@ export function useSync() {
   const [initError, setInitError] = useState<string | null>(null);
   // 同步错误（start_sync 命令失败或运行时失败）
   const [syncError, setSyncError] = useState<string | null>(null);
+  const activeOperationModeRef = useRef<string | null>(null);
 
   const appendLog = useEffectEvent((payload: SyncLogEvent) => {
     const time = new Date(payload.ts).toLocaleTimeString();
@@ -92,6 +97,11 @@ export function useSync() {
   });
 
   const applySnapshot = useEffectEvent((next: SyncSnapshot) => {
+    activeOperationModeRef.current = next.mode ?? null;
+    if (isCacheReexportMode(next.mode)) {
+      return;
+    }
+
     setSnapshot(next);
     if (next.status === "failed" && !next.running) {
       setSyncError(next.currentMessage || "同步失败");
@@ -99,6 +109,10 @@ export function useSync() {
   });
 
   const applyCompletion = useEffectEvent((event: SyncCompletedEvent) => {
+    if (isCacheReexportMode(activeOperationModeRef.current)) {
+      return;
+    }
+
     setSummary(event);
     // 同步完成后刷新概览
     loadOverview();
@@ -106,6 +120,10 @@ export function useSync() {
 
   // 处理同步条目事件
   const handleSyncItem = useEffectEvent((payload: SyncItemEvent) => {
+    if (isCacheReexportMode(activeOperationModeRef.current)) {
+      return;
+    }
+
     if (payload.action === "failed" && payload.error) {
       setFailedItems((current) => {
         const item: FailedItem = {
