@@ -375,7 +375,11 @@ pub(crate) fn open_export_dir_path(path: &Path) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_log_dir() -> Result<(), String> {
-    let path = crate::config::user_data_dir()?;
+    let path = crate::config::user_data_dir()?.join("sync.log");
+    if !path.exists() {
+        return Err("日志文件不存在，请先运行一次同步。".to_string());
+    }
+
     open_export_dir_path(&path)
 }
 
@@ -757,16 +761,20 @@ pub fn get_dir_export_config(export_dir: String) -> Result<DirExportConfig, Stri
 }
 
 #[tauri::command]
-pub fn get_cache_info() -> Result<CacheInfo, String> {
-    match CacheManager::load() {
-        Ok(manager) => Ok(manager.info()),
-        Err(_) => Ok(CacheInfo {
+pub async fn get_cache_info() -> Result<CacheInfo, String> {
+    tauri::async_runtime::spawn_blocking(|| match CacheManager::load() {
+        Ok(manager) => manager.info(),
+        Err(_) => CacheInfo {
             exists: false,
             total_count: 0,
+            main_note_count: 0,
+            sub_note_count: 0,
             cached_at: None,
             file_size_bytes: None,
-        }),
-    }
+        },
+    })
+    .await
+    .map_err(|error| format!("读取缓存信息失败: {error}"))
 }
 
 #[tauri::command]

@@ -125,6 +125,8 @@ export type UpdateInfo = {
 export type CacheInfo = {
   exists: boolean;
   totalCount: number;
+  mainNoteCount: number;
+  subNoteCount: number;
   cachedAt?: number | null;
   fileSizeBytes?: number | null;
 };

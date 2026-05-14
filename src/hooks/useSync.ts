@@ -67,6 +67,7 @@ export function useSync() {
   const [summary, setSummary] = useState<SyncCompletedEvent | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const deferredLogs = useDeferredValue(logs);
+  const [isReady, setIsReady] = useState(false);
 
   // 同步概览数据
   const [overview, setOverview] = useState<SyncOverview | null>(null);
@@ -166,13 +167,13 @@ export function useSync() {
           invoke<SyncSnapshot>("get_sync_snapshot")
         ]);
 
-        // 加载概览数据
-        await loadOverview();
-
         if (!mounted) return;
 
         setSettings(loadedSettings);
         applySnapshot(loadedSnapshot);
+        setIsReady(true);
+        // 概览用于历史摘要，不应阻塞页面进入可用状态。
+        void loadOverview();
 
         // 注册事件监听器
         cleanup = await Promise.all([
@@ -194,6 +195,7 @@ export function useSync() {
       } catch (error) {
         if (mounted) {
           setInitError(String(error));
+          setIsReady(true);
         }
       }
     }
@@ -321,6 +323,7 @@ export function useSync() {
     overview,
     failedItems,
     initError,
+    isReady,
     syncError,
     refreshSettings,
     saveSettings,

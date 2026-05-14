@@ -547,21 +547,35 @@ async fn run_sync_inner(
     }
     index.save()?;
 
-    // 保存同步历史记录
-    if let Ok(mut history) = HistoryManager::load(&user_data) {
-        history.add_entry(
-            sync_timestamp,
-            mode.as_str(),
-            counters.total,
-            counters.created,
-            counters.updated,
-            counters.skipped,
-            counters.failed,
-            cancelled,
-        );
-        let _ = history.save();
-    }
+    let should_record_history = !matches!(mode, SyncMode::Incremental)
+        || counters.created > 0
+        || counters.updated > 0
+        || counters.failed > 0
+        || cancelled;
 
+    // 空增量同步不覆盖“上次同步结果”，否则用户会丢失最近一次真实导出的摘要。
+    if should_record_history {
+        if let Ok(mut history) = HistoryManager::load(&user_data) {
+            history.add_entry(
+                sync_timestamp,
+                mode.as_str(),
+                counters.total,
+                counters.created,
+                counters.updated,
+                counters.skipped,
+                counters.failed,
+                cancelled,
+            );
+            let _ = history.save();
+        }
+    } else {
+        emit_log(
+            app,
+            &log_manager,
+            "info",
+            "本次增量同步没有新增或更新的笔记，保留上次同步结果。",
+        )?;
+    }
     if !cache.is_empty() {
         cache.set_cached_at(sync_timestamp);
         match cache.save() {
@@ -600,6 +614,8 @@ async fn run_sync_inner(
         snapshot.counters = counters.clone();
         snapshot.current_message = if cancelled {
             "同步已取消。".to_string()
+        } else if !should_record_history {
+            "同步完成，没有新增或更新的笔记。".to_string()
         } else {
             "同步完成。".to_string()
         };

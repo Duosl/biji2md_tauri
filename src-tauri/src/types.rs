@@ -357,6 +357,8 @@ pub fn mask_secret(value: &str, visible_start: usize, visible_end: usize) -> Str
 pub struct CacheInfo {
     pub exists: bool,
     pub total_count: usize,
+    pub main_note_count: usize,
+    pub sub_note_count: usize,
     pub cached_at: Option<u64>,
     pub file_size_bytes: Option<u64>,
 }

@@ -105,6 +105,19 @@ impl CacheManager {
         } else {
             (true, Some(self.cache.cached_at), self.cache.notes.len())
         };
+        let sub_note_count = self
+            .cache
+            .notes
+            .values()
+            .filter(|raw| {
+                raw.get("parent_id")
+                    .or_else(|| raw.get("parentId"))
+                    .and_then(|value| value.as_str())
+                    .map(|value| !value.trim().is_empty())
+                    .unwrap_or(false)
+            })
+            .count();
+        let main_note_count = total_count.saturating_sub(sub_note_count);
 
         let file_size_bytes = if exists {
             fs::metadata(&self.path).ok().map(|m| m.len())
@@ -115,6 +128,8 @@ impl CacheManager {
         CacheInfo {
             exists,
             total_count,
+            main_note_count,
+            sub_note_count,
             cached_at,
             file_size_bytes,
         }

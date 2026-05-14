@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSync } from "../hooks/useSync";
+import { useCache } from "../hooks/useCache";
 
 const LOG_FILTERS = [
   { key: "key", label: "关键节点" },
@@ -84,6 +85,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     logs,
     overview,
     failedItems,
+    isReady,
     syncError,
     saveSettings,
     startSync,
@@ -93,6 +95,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     openLogDir,
     openExportDir
   } = useSync();
+  const { cacheInfo, loadCacheInfo } = useCache();
 
   const [statusText, setStatusText] = useState("准备就绪");
   const [logFilter, setLogFilter] = useState<LogFilterKey>("key");
@@ -100,8 +103,8 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
   const userCollapsedRef = useRef(false);
 
   const mode = settings.lastMode === "full" ? "full" : "incremental";
-  const hasToken = settings.hasToken;
-  const hasExportDir = !!settings.defaultOutputDir?.trim();
+  const hasToken = isReady ? settings.hasToken : true;
+  const hasExportDir = isReady ? !!settings.defaultOutputDir?.trim() : true;
   const isConfigComplete = hasToken && hasExportDir;
   const isRunning = snapshot.running;
   const hasCurrentRun = (isRunning || syncError !== null) && (snapshot.processedCount > 0 || isRunning);
@@ -124,6 +127,9 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
       setShowLogs(true);
     }
   }, [logs.length, hasErrors]);
+  useEffect(() => {
+    void loadCacheInfo();
+  }, [loadCacheInfo]);
 
   const toggleLogs = () => {
     setShowLogs((prev) => {
@@ -143,10 +149,19 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
       ? Math.min((snapshot.processedCount || 0) / progressTotal, 1)
       : 0;
 
-  const resultSummary: DisplaySummary | null = summary
+  const currentSummaryMode = snapshot.mode || mode;
+  const isNoChangeIncrementalSummary =
+    !!summary &&
+    currentSummaryMode === "incremental" &&
+    !summary.cancelled &&
+    summary.created === 0 &&
+    summary.updated === 0 &&
+    summary.failed === 0;
+
+  const resultSummary: DisplaySummary | null = summary && !isNoChangeIncrementalSummary
     ? {
         timestamp: snapshot.finishedAt ?? Date.now(),
-        mode: snapshot.mode || mode,
+        mode: currentSummaryMode,
         total: summary.total,
         exported: summary.created + summary.updated,
         created: summary.created,
@@ -184,6 +199,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
   ].filter(Boolean) as string[];
 
   const headerStatusText = (() => {
+    if (!isReady) return "加载中";
     if (snapshot.cancelRequested) return "正在取消";
     if (isRunning) return "同步中";
     if (!isConfigComplete) return "配置未完成";
@@ -193,6 +209,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
   })();
 
   const syncStateValue = (() => {
+    if (!isReady) return "加载中";
     if (snapshot.cancelRequested) return "取消中";
     if (isRunning) return "同步中";
     if (resultSummary?.cancelled) return "已取消";
@@ -200,9 +217,91 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     return "空闲";
   })();
 
-  const recentFailedCount = isRunning
-    ? failedItems.length
-    : overview?.recentFailedCount ?? 0;
+  const justCompletedSummary = !isRunning && !syncError && summary ? summary : null;
+
+  const commandTone = syncError && !isRunning
+    ? "error"
+    : !isReady
+      ? "ready"
+      : !isConfigComplete
+      ? "warning"
+      : isRunning
+        ? "running"
+        : justCompletedSummary
+          ? justCompletedSummary.cancelled
+            ? "warning"
+            : "completed"
+          : "ready";
+
+  const commandTitle = (() => {
+    if (!isReady) return "加载同步状态";
+    if (syncError && !isRunning) return "同步失败";
+    if (!isConfigComplete) return "请完善配置后再开始同步";
+    if (isRunning) return statusText;
+    if (justCompletedSummary?.cancelled) return "同步已取消";
+    if (justCompletedSummary) return "同步完成";
+    return "准备就绪";
+  })();
+
+  const commandDescription = (() => {
+    if (!isReady) return "正在读取本地配置、缓存和同步历史。";
+    if (syncError && !isRunning) return "上次任务未完成，请检查错误信息。";
+    if (!isConfigComplete) return `缺少 ${missingItems.join(" / ")}，配置完成后即可导出 Markdown。`;
+    if (isRunning) return snapshot.currentMessage || "正在拉取云端笔记并写入本地 Markdown。";
+    if (justCompletedSummary?.cancelled) {
+      return `已处理 ${justCompletedSummary.total} 个主笔记，任务在完成前被取消。`;
+    }
+    if (justCompletedSummary) {
+      const exported = justCompletedSummary.created + justCompletedSummary.updated;
+      if (isNoChangeIncrementalSummary) {
+        return "恭喜你，已经全部是最新笔记了~";
+      }
+      if (justCompletedSummary.failed > 0) {
+        return `已处理 ${justCompletedSummary.total} 个主笔记，导出 ${exported} 个文件，${justCompletedSummary.failed} 项失败。`;
+      }
+      return `已处理 ${justCompletedSummary.total} 个主笔记，导出 ${exported} 个文件。`;
+    }
+    return "欢迎使用该工具，将 Get笔记导出为本地 Markdown 文件。";
+  })();
+
+  const overviewMetrics = [
+    {
+      label: "配置",
+      value: !isReady ? "读取中" : isConfigComplete ? "完整" : "待配置",
+      detail: !isReady
+        ? "正在读取本地配置"
+        : isConfigComplete ? "Token 与导出目录已就绪" : `缺少 ${missingItems.join(" / ")}`
+    },
+    {
+      label: "状态",
+      value: syncStateValue,
+      detail: isRunning
+        ? statusText
+        : justCompletedSummary
+          ? justCompletedSummary.cancelled
+            ? "本次任务未完成"
+            : isNoChangeIncrementalSummary
+              ? "没有新增笔记"
+              : `${justCompletedSummary.created + justCompletedSummary.updated} 个文件已导出`
+          : "等待下一次同步"
+    },
+    {
+      label: "上次同步",
+      value: resultSummary?.timestamp ? formatTimestamp(resultSummary.timestamp) : "从未",
+      detail: resultSummary
+        ? `${resultSummary.mode === "full" ? "全量" : "增量"} · ${resultSummary.total} 个主笔记`
+        : "还没有同步历史"
+    },
+    {
+      label: "本地笔记",
+      value: cacheInfo?.exists ? cacheInfo.totalCount.toString() : "0",
+      detail: cacheInfo?.exists
+        ? `主笔记 ${cacheInfo.mainNoteCount} · 子笔记 ${cacheInfo.subNoteCount}`
+        : "暂无本地缓存"
+    }
+  ];
+
+  const shouldShowHeaderStatus = isReady && (isRunning || snapshot.cancelRequested || !isConfigComplete);
 
   const handleModeChange = async (nextMode: "incremental" | "full") => {
     if (isRunning || nextMode === mode) return;
@@ -219,6 +318,7 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
   };
 
   const handlePrimaryAction = () => {
+    if (!isReady) return;
     if (!isConfigComplete) {
       onOpenSettings?.();
       return;
@@ -233,68 +333,35 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           <p className="content-label">笔记同步</p>
           <h2>同步与导出</h2>
         </div>
-        <div className="header-status">
-          <span className={`dot ${isRunning ? "active" : ""}`} />
-          <span>{headerStatusText}</span>
-        </div>
+        {shouldShowHeaderStatus && (
+          <div className="header-status">
+            <span className={`dot ${isRunning ? "active" : ""}`} />
+            <span>{headerStatusText}</span>
+          </div>
+        )}
       </header>
 
-      <section className="section sync-panel">
-        <div className="section-header">
-          <h3>概览</h3>
-          {!isConfigComplete && <span className="section-count error">待配置</span>}
-        </div>
-
-        <div className="stat-grid sync-overview-grid">
-          <div className="stat-cell">
-            <strong>{isConfigComplete ? "完整" : "待配置"}</strong>
-            <span>配置状态</span>
-            <small>
-              {isConfigComplete ? "Token 与导出目录已就绪" : `缺少 ${missingItems.join(" / ")}`}
-            </small>
-          </div>
-          <div className="stat-cell">
-            <strong>{syncStateValue}</strong>
-            <span>同步状态</span>
-            <small>{isRunning ? statusText : "等待下一次同步"}</small>
-          </div>
-          <div className="stat-cell">
-            <strong>{resultSummary?.timestamp ? formatTimestamp(resultSummary.timestamp) : "从未"}</strong>
-            <span>上次同步</span>
-            <small>
-              {resultSummary
-                ? `${resultSummary.mode === "full" ? "全量" : "增量"} · ${resultSummary.total} 个主笔记`
-                : "还没有同步历史"}
-            </small>
-          </div>
-          <div className="stat-cell">
-            <strong>{recentFailedCount}</strong>
-            <span>最近失败</span>
-            <small>{isRunning ? "本次运行内" : "近期失败统计"}</small>
-          </div>
-        </div>
-      </section>
-
-      <section className="section sync-panel">
-        <div className="sync-action-row">
-          <div>
-            <h3 className="section-title">同步操作</h3>
-            <p className="section-subtitle">
-              {isConfigComplete
-                ? "当前配置可直接发起同步。"
-                : "先完成配置，再开始同步导出。"}
-            </p>
+      <section className={`section sync-command-panel ${commandTone}`}>
+        <div className="sync-command-main">
+          <div className="sync-command-copy">
+            <h3>{commandTitle}</h3>
+            <p>{commandDescription}</p>
           </div>
 
           <button
             className={`sync-button ${isRunning ? "running" : ""} ${!isConfigComplete ? "sync-button-config" : ""}`}
             onClick={handlePrimaryAction}
-            disabled={isRunning}
+            disabled={isRunning || !isReady}
           >
             {isRunning ? (
               <>
                 <span className="spinner" />
                 同步中
+              </>
+            ) : !isReady ? (
+              <>
+                <span className="spinner" />
+                加载中
               </>
             ) : !isConfigComplete ? (
               <>
@@ -308,13 +375,23 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
                 </svg>
-                开始同步
+                {justCompletedSummary ? "再次同步" : "开始同步"}
               </>
             )}
           </button>
         </div>
 
-        {!isConfigComplete && (
+        <div className="sync-command-metrics">
+          {overviewMetrics.map((item) => (
+            <div className="sync-command-metric" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <small>{item.detail}</small>
+            </div>
+          ))}
+        </div>
+
+        {isReady && !isConfigComplete && (
           <div className="sync-inline-alert">
             {missingItems.map((item) => (
               <span key={item}>{item} 未配置</span>
@@ -322,40 +399,43 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
           </div>
         )}
 
-        <div className="mode-selector">
-          <button
-            className={`mode-pill ${mode === "incremental" ? "active" : ""}`}
-            onClick={() => void handleModeChange("incremental")}
-            disabled={isRunning}
-          >
-            增量
-          </button>
-          <button
-            className={`mode-pill ${mode === "full" ? "active" : ""}`}
-            onClick={() => void handleModeChange("full")}
-            disabled={isRunning}
-          >
-            全量
-          </button>
-        </div>
+        <div className="sync-command-controls">
+          <div className="sync-control-group">
+            <div className="mode-selector">
+              <button
+                className={`mode-pill ${mode === "incremental" ? "active" : ""}`}
+                onClick={() => void handleModeChange("incremental")}
+                disabled={isRunning}
+              >
+                增量
+              </button>
+              <button
+                className={`mode-pill ${mode === "full" ? "active" : ""}`}
+                onClick={() => void handleModeChange("full")}
+                disabled={isRunning}
+              >
+                全量
+              </button>
+            </div>
+          </div>
 
-        <div className="mode-hint sync-mode-hint">
-          {mode === "incremental"
-            ? "增量适合日常同步；在云端修改历史笔记希望同步到本地时可切到全量模式。"
-            : "全量会重新获取全部笔记，会覆盖本地修改过的笔记。请谨慎使用。"}
-        </div>
+          <p className="sync-control-hint">
+            {mode === "incremental"
+              ? "日常同步优先使用增量；云端历史内容变更时再切到全量。"
+              : "全量会重新获取全部笔记，并覆盖本地同名导出文件。"}
+          </p>
 
-        <div className="sync-action-buttons">
-          <button className="btn btn-secondary" onClick={() => void openExportDir()}>
-            打开导出目录
-          </button>
+          <div className="sync-action-buttons">
+            <button className="sync-directory-button" onClick={() => void openExportDir()}>
+              打开导出目录
+            </button>
+            {isRunning && (
+              <button className="cancel-link" onClick={() => void cancelSync()}>
+                取消同步
+              </button>
+            )}
+          </div>
         </div>
-
-        {isRunning && (
-          <button className="cancel-link" onClick={() => void cancelSync()}>
-            取消同步
-          </button>
-        )}
 
         {syncError && !isRunning && (
           <div className="sync-error-alert">
@@ -427,9 +507,6 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
             {resultSummary.mode === "full"
               ? <span className="sync-mode-tag">全量</span>
               : <span className="sync-mode-tag">增量</span>}
-            <span className="section-count">
-              {resultSummary.timestamp ? formatTimestamp(resultSummary.timestamp) : "刚完成"}
-            </span>
           </div>
 
           <div className="stat-grid sync-result-grid">
