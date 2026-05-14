@@ -386,6 +386,49 @@ textarea {
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
+.reexport-hint {
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.reexport-hint-body {
+  margin-bottom: 10px;
+}
+
+.reexport-hint-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.reexport-hint-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.reexport-hint-result {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.reexport-hint-result.success {
+  color: var(--success);
+}
+
+.reexport-hint-result.error {
+  color: var(--danger);
+}
+
+.reexport-hint-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 关于/更新 */
 .section-meta {
   padding-top: 22px;
@@ -786,6 +829,22 @@ textarea {
   display: flex;
   gap: 8px;
   margin-top: 16px;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
 }
 
 /* ==========================================================================
@@ -2254,24 +2313,6 @@ textarea {
     0 12px 20px -8px rgba(17, 24, 39, 0.3),
     0 4px 8px -4px rgba(17, 24, 39, 0.18),
     0 0 0 1px rgba(0, 0, 0, 0.05) inset;
-}
-
-.sync-button-secondary {
-  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
-  margin-top: 8px;
-  font-size: 14px;
-}
-
-.sync-button-secondary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5a6270 0%, #454d59 100%);
-}
-
-.cache-status {
-  margin-top: 10px;
-  padding: 8px 14px;
-  font-size: 13px;
-  color: var(--text-muted);
-  text-align: center;
 }
 
 .sync-inline-alert {

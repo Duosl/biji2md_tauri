@@ -17,11 +17,12 @@
 - `src/App.tsx`：应用外壳、平台初始化、更新状态所有者。
 - `src/index.css`：全局 CSS 和平台相关布局变量。
 - `src/types/index.ts`：前端共享 TypeScript 类型。
-- `src/hooks/useSync.ts`：同步状态、事件监听、历史日志、本地缓存重导出动作。
+- `src/hooks/useSync.ts`：同步状态、事件监听和历史日志。
+- `src/hooks/useCache.ts`：本地笔记缓存查询与重导出。
 - `src/hooks/useSettings.ts`：设置加载/保存和字段级持久化。
 - `src/hooks/useUpdater.ts`：更新检查、下载/安装状态、重启就绪状态。
 - `src/pages/SyncPage.tsx`：同步流程界面。
-- `src/pages/SettingsPage.tsx`：设置、Token、导出偏好、关于和更新界面。
+- `src/pages/SettingsPage.tsx`：设置、Token、导出偏好、缓存重导出、关于和更新界面。
 - `src/pages/AutomationPage.tsx`：自动化相关界面。
 - `src/components/Toolbar.tsx`：顶部工具栏和更新徽标/重启动作。
 - `src/components/OnboardingGuide.tsx`：首次使用引导。

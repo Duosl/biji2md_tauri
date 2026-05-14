@@ -2,9 +2,10 @@
    设置页面 - 字段级自动保存
    ========================================================================== */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../hooks/useSettings";
+import { useCache } from "../hooks/useCache";
 import type { UpdateState } from "../hooks/useUpdater";
 import logoUrl from "../assets/ic_logo.svg";
 
@@ -35,6 +36,22 @@ export function SettingsPage({
     selectExportDir
   } = useSettings();
 
+  const {
+    cacheInfo,
+    reexporting,
+    loadCacheInfo,
+    reexportFromCache
+  } = useCache();
+
+  const [reexportDismissed, setReexportDismissed] = useState(false);
+  const [reexportResult, setReexportResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // 导出配置变更检测：初始快照 vs 当前值
+  type ExportConfigSnapshot = Record<string, string | undefined>;
+  const [initialExportConfig, setInitialExportConfig] = useState<ExportConfigSnapshot>({});
+  const [currentExportConfig, setCurrentExportConfig] = useState<ExportConfigSnapshot>({});
+  const initialSnapshotReady = useRef(false);
+
   const [appVersion, setAppVersion] = useState("0.0.0");
 
   // 本地编辑状态（用于输入框）
@@ -48,7 +65,17 @@ export function SettingsPage({
   useEffect(() => {
     loadSettings();
     invoke<string>("get_app_version").then(setAppVersion).catch(() => {});
+    loadCacheInfo();
   }, []);
+
+  // 页面加载时记录导出配置初始快照，用于变更检测（只记录一次）
+  useEffect(() => {
+    if (!settings.exportStructure || initialSnapshotReady.current) return;
+    const snapshot: ExportConfigSnapshot = { exportStructure: settings.exportStructure };
+    setInitialExportConfig(snapshot);
+    setCurrentExportConfig({ ...snapshot });
+    initialSnapshotReady.current = true;
+  }, [settings.exportStructure]);
 
   const handleCheckUpdate = async () => {
     console.log("[DEBUG] settings update check request:", {
@@ -127,6 +154,24 @@ export function SettingsPage({
   // Token 清空
   const handleClearToken = async () => {
     await clearToken();
+  };
+
+  const handleExportConfigChange = async (key: string, value: string) => {
+    await saveField(key as any, value);
+    setCurrentExportConfig((prev) => ({ ...prev, [key]: value }));
+    setReexportDismissed(false);
+  };
+
+  const handleReexport = async () => {
+    setReexportResult(null);
+    const result = await reexportFromCache();
+    if (result.success) {
+      setReexportResult({ type: "success", message: "重新导出完成" });
+      setTimeout(() => setReexportResult(null), 3000);
+    } else {
+      setReexportResult({ type: "error", message: result.error || "重导出失败" });
+      setTimeout(() => setReexportResult(null), 6000);
+    }
   };
 
   return (
@@ -259,7 +304,7 @@ export function SettingsPage({
                 name="exportStructure"
                 value="by_topic"
                 checked={settings.exportStructure === "by_topic"}
-                onChange={(e) => saveField("exportStructure", e.target.value)}
+                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>按知识库分组</span>
             </label>
@@ -269,7 +314,7 @@ export function SettingsPage({
                 name="exportStructure"
                 value="by_month"
                 checked={settings.exportStructure === "by_month"}
-                onChange={(e) => saveField("exportStructure", e.target.value)}
+                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>按月份分组</span>
             </label>
@@ -279,7 +324,7 @@ export function SettingsPage({
                 name="exportStructure"
                 value="by_tag"
                 checked={settings.exportStructure === "by_tag"}
-                onChange={(e) => saveField("exportStructure", e.target.value)}
+                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>按主标签分组</span>
             </label>
@@ -289,12 +334,54 @@ export function SettingsPage({
                 name="exportStructure"
                 value="flat"
                 checked={settings.exportStructure === "flat"}
-                onChange={(e) => saveField("exportStructure", e.target.value)}
+                onChange={(e) => void handleExportConfigChange("exportStructure", e.target.value)}
               />
               <span>平铺（所有文件在同一目录）</span>
             </label>
           </div>
         </div>
+
+        {(() => {
+          const hasExportConfigChanged = Object.keys(initialExportConfig).some(
+            (key) => initialExportConfig[key] !== currentExportConfig[key]
+          );
+          if (!cacheInfo?.exists || reexportDismissed || !hasExportConfigChanged) return null;
+
+          const isRetry = reexportResult?.type === "error";
+
+          return (
+            <div className="reexport-hint">
+              <div className="reexport-hint-body">
+                <p className="reexport-hint-text">
+                  <strong>导出目录结构</strong>已变更，是否需要重新导出所有笔记以适配新的目录结构？
+                </p>
+                {reexportResult && (
+                  <span className={`reexport-hint-result ${reexportResult.type}`}>
+                    {reexportResult.type === "success" ? "✓ " : "✕ "}
+                    {reexportResult.message}
+                  </span>
+                )}
+              </div>
+              <div className="reexport-hint-actions">
+                <button
+                  className={`btn btn-sm ${isRetry ? "btn-danger" : "btn-secondary"}`}
+                  onClick={handleReexport}
+                  disabled={reexporting}
+                >
+                  {reexporting ? "正在导出..." : isRetry ? "再次尝试" : "重新导出"}
+                </button>
+                {!reexporting && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setReexportDismissed(true)}
+                  >
+                    先不用了
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
       </section>
 

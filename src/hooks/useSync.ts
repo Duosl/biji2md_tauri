@@ -21,8 +21,7 @@ import type {
   SyncItemEvent,
   LogEntry,
   SyncOverview,
-  FailedItem,
-  CacheInfo
+  FailedItem
 } from "../types";
 
 const emptySnapshot: SyncSnapshot = {
@@ -75,9 +74,6 @@ export function useSync() {
   // 同步错误（start_sync 命令失败或运行时失败）
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // 缓存信息
-  const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
-
   const appendLog = useEffectEvent((payload: SyncLogEvent) => {
     const time = new Date(payload.ts).toLocaleTimeString();
     startTransition(() => {
@@ -107,8 +103,6 @@ export function useSync() {
     setSummary(event);
     // 同步完成后刷新概览
     loadOverview();
-    // 刷新缓存信息
-    loadCacheInfo();
   });
 
   // 处理同步条目事件
@@ -157,8 +151,6 @@ export function useSync() {
 
         // 加载概览数据
         await loadOverview();
-        // 加载缓存信息
-        await loadCacheInfo();
 
         if (!mounted) return;
 
@@ -271,31 +263,6 @@ export function useSync() {
   // 清除同步错误
   const clearSyncError = () => setSyncError(null);
 
-  // 加载缓存信息
-  const loadCacheInfo = useEffectEvent(async () => {
-    try {
-      const data = await invoke<CacheInfo>("get_cache_info");
-      setCacheInfo(data);
-    } catch (error) {
-      console.error("Failed to load cache info:", error);
-    }
-  });
-
-  // 从缓存重导出
-  const reexportFromCache = async () => {
-    if (!settings.defaultOutputDir) return;
-    setSummary(null);
-    setLogs([]);
-    setFailedItems([]);
-    setSyncError(null);
-    try {
-      await invoke("reexport_from_cache");
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setSyncError(message);
-    }
-  };
-
   // 从文件加载历史日志（懒加载）
   const loadHistoryLogs = useCallback(async () => {
     try {
@@ -342,15 +309,12 @@ export function useSync() {
     failedItems,
     initError,
     syncError,
-    cacheInfo,
     refreshSettings,
     saveSettings,
     startSync,
     cancelSync,
     clearLogs,
     clearSyncError,
-    loadCacheInfo,
-    reexportFromCache,
     loadHistoryLogs,
     openExportDir,
     openLogDir
