@@ -175,7 +175,7 @@ impl Exporter {
         let normalized_content = note.content.replace("\r\n", "\n");
 
         let mut frontmatter = format!(
-            "title: {}\nnote_id: {}\ntags: [{}]\ntopics: [{}]\ncreated_at: {}\nupdated_at: {}",
+            "标题: {}\n笔记ID: {}\n标签: [{}]\n知识库: [{}]\n创建时间: {}\n上次更新时间: {}",
             yaml_string(title),
             yaml_string(&note.id),
             tags,
@@ -185,7 +185,7 @@ impl Exporter {
         );
 
         if let Some(ref parent_id) = note.parent_id {
-            frontmatter.push_str(&format!("\nparent_id: {}", yaml_string(parent_id)));
+            frontmatter.push_str(&format!("\n父笔记ID: {}", yaml_string(parent_id)));
         }
 
         let mut body = normalized_content;
