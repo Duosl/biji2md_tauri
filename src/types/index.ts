@@ -132,4 +132,5 @@ export type CacheInfo = {
 // 目录级导出配置（存储于 {exportDir}/.biji2md/config.json）
 export type DirExportConfig = {
   structure: "flat" | "by_month" | "by_tag" | "by_topic";
+  linkFormat: "wikilink" | "markdown";
 };

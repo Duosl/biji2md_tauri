@@ -56,6 +56,16 @@ function isCacheReexportMode(mode?: string | null) {
   return mode === "cache_reexport" || mode === "cache_reexport_safe";
 }
 
+function normalizeExportStructure(value?: string | null) {
+  return value === "flat" || value === "by_month" || value === "by_tag" || value === "by_topic"
+    ? value
+    : "by_topic";
+}
+
+function normalizeLinkFormat(value?: string | null) {
+  return value === "markdown" || value === "wikilink" ? value : "wikilink";
+}
+
 export function SettingsPage({
   updateState,
   onCheckUpdate,
@@ -209,7 +219,10 @@ export function SettingsPage({
     if (!dir) return;
     invoke<DirExportConfig>("get_dir_export_config", { exportDir: dir })
       .then((cfg) => {
-        const snapshot: ExportConfigSnapshot = { exportStructure: cfg.structure };
+        const snapshot: ExportConfigSnapshot = {
+          exportStructure: normalizeExportStructure(cfg.structure),
+          linkFormat: normalizeLinkFormat(cfg.linkFormat),
+        };
         setInitialExportConfig(snapshot);
         setCurrentExportConfig({ ...snapshot });
         setDirExportConfig(cfg);
@@ -217,7 +230,7 @@ export function SettingsPage({
       })
       .catch((error) => {
         console.error("Failed to load directory export config:", error);
-        const fallback: ExportConfigSnapshot = { exportStructure: "by_topic" };
+        const fallback: ExportConfigSnapshot = { exportStructure: "by_topic", linkFormat: "wikilink" };
         setInitialExportConfig(fallback);
         setCurrentExportConfig({ ...fallback });
         initialSnapshotReady.current = true;
@@ -328,7 +341,7 @@ export function SettingsPage({
       });
       setReexportPhase("progress");
       const structure = selectedExportStructure;
-      const result = await reexportFromCache(selected, structure);
+      const result = await reexportFromCache(selected, structure, selectedLinkFormat);
       handleReexportResult(result);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -347,7 +360,7 @@ export function SettingsPage({
     });
     setReexportPhase("progress");
     const structure = selectedExportStructure;
-    const result = await reexportSafe(structure);
+    const result = await reexportSafe(structure, selectedLinkFormat);
     handleReexportResult(result);
   };
 
@@ -396,11 +409,17 @@ export function SettingsPage({
     }
   };
 
-  const selectedExportStructure =
+  const selectedExportStructure = normalizeExportStructure(
     currentExportConfig.exportStructure ??
     initialExportConfig.exportStructure ??
-    dirExportConfig?.structure ??
-    "by_topic";
+    dirExportConfig?.structure
+  );
+
+  const selectedLinkFormat = normalizeLinkFormat(
+    currentExportConfig.linkFormat ??
+    initialExportConfig.linkFormat ??
+    dirExportConfig?.linkFormat
+  );
 
   return (
     <div className="page-content">
@@ -552,6 +571,34 @@ export function SettingsPage({
           </div>
         </div>
 
+        <div className="form-group">
+          <label className="form-label">
+            父子笔记链接格式
+          </label>
+          <div className="radio-group">
+            <label className={`radio-item ${selectedLinkFormat === "wikilink" ? "active" : ""}`}>
+              <input
+                type="radio"
+                name="linkFormat"
+                value="wikilink"
+                checked={selectedLinkFormat === "wikilink"}
+                onChange={(e) => handleExportConfigChange("linkFormat", e.target.value)}
+              />
+              <span>Obsidian Wikilink（[[笔记名.md]]）</span>
+            </label>
+            <label className={`radio-item ${selectedLinkFormat === "markdown" ? "active" : ""}`}>
+              <input
+                type="radio"
+                name="linkFormat"
+                value="markdown"
+                checked={selectedLinkFormat === "markdown"}
+                onChange={(e) => handleExportConfigChange("linkFormat", e.target.value)}
+              />
+              <span>Markdown 链接（[笔记名](&lt;路径.md&gt;)）</span>
+            </label>
+          </div>
+        </div>
+
         {(() => {
           const hasExportConfigChanged = Object.keys(initialExportConfig).some(
             (key) => initialExportConfig[key] !== currentExportConfig[key]
@@ -564,7 +611,7 @@ export function SettingsPage({
               <div className="reexport-hint" onClick={handleReexport}>
                 <div className="reexport-hint-body">
                   <p className="reexport-hint-text">
-                    检测到你正在修改<strong>导出目录结构</strong>，是否重新导出笔记以适配新的目录结构？
+                    检测到你正在修改<strong>导出配置</strong>，是否重新导出笔记以适配新的配置？
                   </p>
                 </div>
                 <div className="reexport-hint-actions">
@@ -632,7 +679,7 @@ export function SettingsPage({
                     ) : null}
                   </p>
                   <p className="reexport-option-desc">
-                    新的目录结构已保存，Markdown 文件已按当前设置重新生成。
+                    新的导出配置已保存，Markdown 文件已按当前设置重新生成。
                   </p>
                 </div>
                 <div className="reexport-hint-actions">

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 pub const DEFAULT_EXPORT_STRUCTURE: &str = "by_topic";
+pub const DEFAULT_LINK_FORMAT: &str = "wikilink";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
@@ -20,14 +21,30 @@ pub struct AppConfig {
     pub show_sync_tips: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DirExportConfig {
     #[serde(default = "default_structure")]
     pub structure: String,
+    #[serde(default = "default_link_format", alias = "link_format")]
+    pub link_format: String,
+}
+
+impl Default for DirExportConfig {
+    fn default() -> Self {
+        Self {
+            structure: default_structure(),
+            link_format: default_link_format(),
+        }
+    }
 }
 
 fn default_structure() -> String {
     DEFAULT_EXPORT_STRUCTURE.to_string()
+}
+
+fn default_link_format() -> String {
+    DEFAULT_LINK_FORMAT.to_string()
 }
 
 // ~/.biji2md/
@@ -73,9 +90,7 @@ pub(crate) fn migrate_once(export_dir: &Path, user_data: &Path, cache_dir: &Path
     migrate_file(&history_src, &history_dst);
     migrate_file(&log_src, &log_dst);
 
-    let all_migrated = index_dst.exists()
-        && history_dst.exists()
-        && log_dst.exists();
+    let all_migrated = index_dst.exists() && history_dst.exists() && log_dst.exists();
 
     if all_migrated {
         let timestamp = std::time::SystemTime::now()
@@ -145,8 +160,8 @@ pub fn load_dir_export_config(export_dir: &Path) -> Result<DirExportConfig, Stri
     if !path.exists() {
         return Ok(DirExportConfig::default());
     }
-    let raw = fs::read_to_string(&path)
-        .map_err(|e| format!("failed to read dir export config: {e}"))?;
+    let raw =
+        fs::read_to_string(&path).map_err(|e| format!("failed to read dir export config: {e}"))?;
     serde_json::from_str::<DirExportConfig>(&raw)
         .map_err(|e| format!("failed to parse dir export config: {e}"))
 }
@@ -159,6 +174,5 @@ pub fn save_dir_export_config(export_dir: &Path, config: &DirExportConfig) -> Re
     }
     let content = serde_json::to_string_pretty(config)
         .map_err(|e| format!("failed to serialize dir export config: {e}"))?;
-    fs::write(&path, content)
-        .map_err(|e| format!("failed to write dir export config: {e}"))
+    fs::write(&path, content).map_err(|e| format!("failed to write dir export config: {e}"))
 }

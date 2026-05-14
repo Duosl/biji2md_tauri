@@ -20,8 +20,8 @@ use crate::{
     log::SyncLog,
     state::RuntimeState,
     types::{
-        Note, StartSyncRequest, SyncCompletedEvent, SyncCounters, SyncItemEvent, SyncLogEvent, SyncMode,
-        SyncPageEvent, SyncSnapshot, SyncStatus,
+        Note, StartSyncRequest, SyncCompletedEvent, SyncCounters, SyncItemEvent, SyncLogEvent,
+        SyncMode, SyncPageEvent, SyncSnapshot, SyncStatus,
     },
 };
 
@@ -81,6 +81,7 @@ async fn run_sync_inner(
     let mut exporter = Exporter::new(
         &export_dir,
         Some(&dir_config.structure),
+        Some(&dir_config.link_format),
     )?;
     let previous_last_note_id = index.get_last_note_id();
     let last_sync_at = index.get_last_sync_at();
@@ -219,7 +220,10 @@ async fn run_sync_inner(
 
             if note.sub_note_count > 0 {
                 if let Some(ref prime_id) = note.prime_id {
-                    match client.get_note_children(prime_id, note.sub_note_count as usize).await {
+                    match client
+                        .get_note_children(prime_id, note.sub_note_count as usize)
+                        .await
+                    {
                         Ok(mut children) => {
                             for child in &mut children {
                                 child.parent_title = Some(note.title.clone());
@@ -697,11 +701,7 @@ where
     }
 }
 
-fn set_failed(
-    app: &AppHandle,
-    state: &Arc<Mutex<RuntimeState>>,
-    message: &str,
-) {
+fn set_failed(app: &AppHandle, state: &Arc<Mutex<RuntimeState>>, message: &str) {
     let finished_at = now_millis();
 
     if let Ok(mut guard) = state.lock() {

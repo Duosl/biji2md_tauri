@@ -22,9 +22,9 @@ use crate::{
     state::{AppState, RuntimeState},
     sync::run_sync,
     types::{
-        mask_secret, AppSettings, CacheInfo, PlatformInfo, SaveSettingFieldInput, SaveSettingsInput,
-        StartSyncRequest, SyncCompletedEvent, SyncLogEvent, SyncOverview, SyncSnapshot, SyncStatus,
-        UpdateInfo,
+        mask_secret, AppSettings, CacheInfo, PlatformInfo, SaveSettingFieldInput,
+        SaveSettingsInput, StartSyncRequest, SyncCompletedEvent, SyncLogEvent, SyncOverview,
+        SyncSnapshot, SyncStatus, UpdateInfo,
     },
 };
 
@@ -382,10 +382,10 @@ pub fn open_log_dir() -> Result<(), String> {
 pub fn get_sync_overview(app: AppHandle) -> Result<SyncOverview, String> {
     let config = load_config()?;
 
-    let user_data = crate::config::user_data_dir()
-        .map_err(|e| format!("无法解析用户数据目录: {e}"))?;
-    let cache_dir = crate::config::app_cache_dir(&app)
-        .map_err(|e| format!("无法解析应用缓存目录: {e}"))?;
+    let user_data =
+        crate::config::user_data_dir().map_err(|e| format!("无法解析用户数据目录: {e}"))?;
+    let cache_dir =
+        crate::config::app_cache_dir(&app).map_err(|e| format!("无法解析应用缓存目录: {e}"))?;
 
     // 检查配置是否完整
     let has_token = config
@@ -601,9 +601,7 @@ pub fn get_app_version(app: AppHandle) -> String {
 }
 
 #[tauri::command]
-pub fn get_sync_logs(
-    limit: Option<usize>,
-) -> Result<Vec<SyncLogEvent>, String> {
+pub fn get_sync_logs(limit: Option<usize>) -> Result<Vec<SyncLogEvent>, String> {
     let data_dir = crate::config::user_data_dir()?;
     let log_manager = SyncLog::open(&data_dir)?;
     log_manager.read_recent(limit.unwrap_or(500))
@@ -660,6 +658,7 @@ pub async fn reexport_from_cache(
     state: State<'_, AppState>,
     export_dir: Option<String>,
     structure: Option<String>,
+    link_format: Option<String>,
 ) -> Result<(), String> {
     let (export_dir, cache, cancel_flag, cache_dir) = {
         let mut guard = state
@@ -707,13 +706,28 @@ pub async fn reexport_from_cache(
             counters: Default::default(),
         };
 
-        (export_dir, cache, guard.cancel_flag.clone().unwrap(), crate::config::app_cache_dir(&app).ok())
+        (
+            export_dir,
+            cache,
+            guard.cancel_flag.clone().unwrap(),
+            crate::config::app_cache_dir(&app).ok(),
+        )
     };
 
     let runtime_state = state.inner.clone();
     let app_clone = app.clone();
 
-    let result = run_reexport(app_clone, runtime_state, export_dir, cache, cancel_flag, cache_dir, structure).await;
+    let result = run_reexport(
+        app_clone,
+        runtime_state,
+        export_dir,
+        cache,
+        cancel_flag,
+        cache_dir,
+        structure,
+        link_format,
+    )
+    .await;
 
     if let Ok(mut guard) = state.inner.lock() {
         guard.snapshot.running = false;
@@ -745,6 +759,7 @@ pub async fn reexport_from_cache_safe(
     app: AppHandle,
     state: State<'_, AppState>,
     structure: Option<String>,
+    link_format: Option<String>,
 ) -> Result<(), String> {
     let (export_dir, cache, cancel_flag, cache_dir) = {
         let mut guard = state
@@ -789,13 +804,28 @@ pub async fn reexport_from_cache_safe(
             counters: Default::default(),
         };
 
-        (export_dir, cache, guard.cancel_flag.clone().unwrap(), crate::config::app_cache_dir(&app).ok())
+        (
+            export_dir,
+            cache,
+            guard.cancel_flag.clone().unwrap(),
+            crate::config::app_cache_dir(&app).ok(),
+        )
     };
 
     let runtime_state = state.inner.clone();
     let app_clone = app.clone();
 
-    let result = run_reexport_safe(app_clone, runtime_state, export_dir, cache, cancel_flag, cache_dir, structure).await;
+    let result = run_reexport_safe(
+        app_clone,
+        runtime_state,
+        export_dir,
+        cache,
+        cancel_flag,
+        cache_dir,
+        structure,
+        link_format,
+    )
+    .await;
 
     if let Ok(mut guard) = state.inner.lock() {
         guard.snapshot.running = false;
@@ -830,6 +860,7 @@ async fn run_reexport(
     cancel_flag: Arc<AtomicBool>,
     cache_dir: Option<std::path::PathBuf>,
     structure: Option<String>,
+    link_format: Option<String>,
 ) -> Result<SyncCompletedEvent, String> {
     use crate::{
         api::note_from_value,
@@ -847,9 +878,11 @@ async fn run_reexport(
 
     let dir_config = crate::config::load_dir_export_config(std::path::Path::new(&export_dir))?;
     let effective_structure = structure.unwrap_or_else(|| dir_config.structure);
+    let effective_link_format = link_format.unwrap_or_else(|| dir_config.link_format);
     let mut exporter = Exporter::new(
         &export_dir,
         Some(&effective_structure),
+        Some(&effective_link_format),
     )?;
     let mut index = IndexManager::load(&index_dir)?;
     let user_data = user_data_dir()?;
@@ -859,7 +892,11 @@ async fn run_reexport(
     let mut counters = SyncCounters::default();
     let is_cancelled = || cancel_flag.load(Ordering::Relaxed);
 
-    let _ = log_manager.append(crate::sync::now_millis(), "info", &format!("开始重导出，共 {} 条缓存笔记", total));
+    let _ = log_manager.append(
+        crate::sync::now_millis(),
+        "info",
+        &format!("开始重导出，共 {} 条缓存笔记", total),
+    );
 
     for (idx, raw) in cache.iter().enumerate() {
         if is_cancelled() {
@@ -880,41 +917,47 @@ async fn run_reexport(
             }
             Err(err) => {
                 counters.failed += 1;
-                let _ = log_manager.append(crate::sync::now_millis(), "error", &format!("重导出失败 [{}]: {}", note.title, err));
-                let _ = app.emit("sync_item", crate::types::SyncItemEvent {
-                    page_num: 1,
-                    page_index: idx as u32,
-                    processed_count: idx as u32 + 1,
-                    total_expected: Some(total),
-                    note_id: note.id.clone(),
-                    title: note.title.clone(),
-                    action: "failed".to_string(),
-                    file_path: None,
-                    error: Some(err),
-                });
+                let _ = log_manager.append(
+                    crate::sync::now_millis(),
+                    "error",
+                    &format!("重导出失败 [{}]: {}", note.title, err),
+                );
+                let _ = app.emit(
+                    "sync_item",
+                    crate::types::SyncItemEvent {
+                        page_num: 1,
+                        page_index: idx as u32,
+                        processed_count: idx as u32 + 1,
+                        total_expected: Some(total),
+                        note_id: note.id.clone(),
+                        title: note.title.clone(),
+                        action: "failed".to_string(),
+                        file_path: None,
+                        error: Some(err),
+                    },
+                );
                 continue;
             }
         }
 
-        let _ = app.emit("sync_item", crate::types::SyncItemEvent {
-            page_num: 1,
-            page_index: idx as u32,
-            processed_count: idx as u32 + 1,
-            total_expected: Some(total),
-            note_id: note.id.clone(),
-            title: note.title.clone(),
-            action: "created".to_string(),
-            file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
-            error: None,
-        });
+        let _ = app.emit(
+            "sync_item",
+            crate::types::SyncItemEvent {
+                page_num: 1,
+                page_index: idx as u32,
+                processed_count: idx as u32 + 1,
+                total_expected: Some(total),
+                note_id: note.id.clone(),
+                title: note.title.clone(),
+                action: "created".to_string(),
+                file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
+                error: None,
+            },
+        );
 
         update_snapshot_for_reexport(&app, &state, |snapshot| {
             snapshot.processed_count = idx as u32 + 1;
-            snapshot.current_message = format!(
-                "重导出进度：{}/{}",
-                idx + 1,
-                total
-            );
+            snapshot.current_message = format!("重导出进度：{}/{}", idx + 1, total);
         });
 
         if idx % 10 == 0 && idx > 0 {
@@ -926,6 +969,7 @@ async fn run_reexport(
 
     let dir_cfg = crate::config::DirExportConfig {
         structure: effective_structure,
+        link_format: effective_link_format,
     };
     let _ = crate::config::save_dir_export_config(std::path::Path::new(&export_dir), &dir_cfg);
 
@@ -958,6 +1002,7 @@ async fn run_reexport_safe(
     cancel_flag: Arc<AtomicBool>,
     cache_dir: Option<std::path::PathBuf>,
     structure: Option<String>,
+    link_format: Option<String>,
 ) -> Result<SyncCompletedEvent, String> {
     use crate::{
         api::note_from_value,
@@ -972,8 +1017,7 @@ async fn run_reexport_safe(
     let ts = crate::sync::now_millis();
     let temp_dir = temp_root.join(format!("reexport-tmp-{ts}"));
 
-    fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("无法创建临时目录：{e}"))?;
+    fs::create_dir_all(&temp_dir).map_err(|e| format!("无法创建临时目录：{e}"))?;
 
     let cleanup_temp = || -> Result<(), String> {
         if temp_dir.exists() {
@@ -986,9 +1030,11 @@ async fn run_reexport_safe(
 
     let dir_config = crate::config::load_dir_export_config(std::path::Path::new(&export_dir))?;
     let effective_structure = structure.unwrap_or_else(|| dir_config.structure);
+    let effective_link_format = link_format.unwrap_or_else(|| dir_config.link_format);
     let mut exporter = Exporter::new(
         &temp_dir,
         Some(&effective_structure),
+        Some(&effective_link_format),
     )?;
     let index_dir = cache_dir
         .as_ref()
@@ -1002,7 +1048,15 @@ async fn run_reexport_safe(
     let mut counters = SyncCounters::default();
     let is_cancelled = || cancel_flag.load(Ordering::Relaxed);
 
-    let _ = log_manager.append(ts, "info", &format!("安全重导出开始，共 {} 条缓存笔记，临时目录：{}", total, temp_dir.display()));
+    let _ = log_manager.append(
+        ts,
+        "info",
+        &format!(
+            "安全重导出开始，共 {} 条缓存笔记，临时目录：{}",
+            total,
+            temp_dir.display()
+        ),
+    );
 
     for (idx, raw) in cache.iter().enumerate() {
         if is_cancelled() {
@@ -1033,33 +1087,43 @@ async fn run_reexport_safe(
             }
             Err(err) => {
                 counters.failed += 1;
-                let _ = log_manager.append(ts, "error", &format!("安全重导出失败 [{}]: {}", note.title, err));
-                let _ = app.emit("sync_item", crate::types::SyncItemEvent {
-                    page_num: 1,
-                    page_index: idx as u32,
-                    processed_count: idx as u32 + 1,
-                    total_expected: Some(total),
-                    note_id: note.id.clone(),
-                    title: note.title.clone(),
-                    action: "failed".to_string(),
-                    file_path: None,
-                    error: Some(err),
-                });
+                let _ = log_manager.append(
+                    ts,
+                    "error",
+                    &format!("安全重导出失败 [{}]: {}", note.title, err),
+                );
+                let _ = app.emit(
+                    "sync_item",
+                    crate::types::SyncItemEvent {
+                        page_num: 1,
+                        page_index: idx as u32,
+                        processed_count: idx as u32 + 1,
+                        total_expected: Some(total),
+                        note_id: note.id.clone(),
+                        title: note.title.clone(),
+                        action: "failed".to_string(),
+                        file_path: None,
+                        error: Some(err),
+                    },
+                );
                 continue;
             }
         }
 
-        let _ = app.emit("sync_item", crate::types::SyncItemEvent {
-            page_num: 1,
-            page_index: idx as u32,
-            processed_count: idx as u32 + 1,
-            total_expected: Some(total),
-            note_id: note.id.clone(),
-            title: note.title.clone(),
-            action: "created".to_string(),
-            file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
-            error: None,
-        });
+        let _ = app.emit(
+            "sync_item",
+            crate::types::SyncItemEvent {
+                page_num: 1,
+                page_index: idx as u32,
+                processed_count: idx as u32 + 1,
+                total_expected: Some(total),
+                note_id: note.id.clone(),
+                title: note.title.clone(),
+                action: "created".to_string(),
+                file_path: index.get_file_path(&note.id).map(|s| s.to_string()),
+                error: None,
+            },
+        );
 
         update_snapshot_for_reexport(&app, &state, |snapshot| {
             snapshot.processed_count = idx as u32 + 1;
@@ -1073,24 +1137,40 @@ async fn run_reexport_safe(
 
     index.save()?;
 
-    let _ = log_manager.append(ts, "info", &format!(
-        "安全重导出完成：创建 {}，更新 {}，跳过 {}，失败 {}。开始替换原目录...",
-        counters.created, counters.updated, counters.skipped, counters.failed
-    ));
+    let _ = log_manager.append(
+        ts,
+        "info",
+        &format!(
+            "安全重导出完成：创建 {}，更新 {}，跳过 {}，失败 {}。开始替换原目录...",
+            counters.created, counters.updated, counters.skipped, counters.failed
+        ),
+    );
 
-    swap_export_dir_contents(&temp_dir, &std::path::Path::new(&export_dir), &log_manager, ts)?;
+    swap_export_dir_contents(
+        &temp_dir,
+        &std::path::Path::new(&export_dir),
+        &log_manager,
+        ts,
+    )?;
 
     cleanup_temp()?;
 
     let dir_cfg = crate::config::DirExportConfig {
         structure: effective_structure,
+        link_format: effective_link_format,
     };
     let _ = crate::config::save_dir_export_config(std::path::Path::new(&export_dir), &dir_cfg);
 
-    let _ = log_manager.append(ts, "info", &format!(
-        "安全重导出全部完成：创建 {}，跳过 {}，失败 {}",
-        counters.created + counters.updated, counters.skipped, counters.failed
-    ));
+    let _ = log_manager.append(
+        ts,
+        "info",
+        &format!(
+            "安全重导出全部完成：创建 {}，跳过 {}，失败 {}",
+            counters.created + counters.updated,
+            counters.skipped,
+            counters.failed
+        ),
+    );
 
     Ok(SyncCompletedEvent {
         total: counters.created + counters.updated,
@@ -1109,25 +1189,39 @@ fn swap_export_dir_contents(
     log_manager: &SyncLog,
     ts: u64,
 ) -> Result<(), String> {
-    let _ = log_manager.append(ts, "info", &format!("清空原导出目录内容：{}", export_dir.display()));
+    let _ = log_manager.append(
+        ts,
+        "info",
+        &format!("清空原导出目录内容：{}", export_dir.display()),
+    );
 
     for entry in fs::read_dir(export_dir).map_err(|e| format!("读取导出目录失败：{e}"))? {
         let entry = entry.map_err(|e| format!("读取目录条目失败：{e}"))?;
         let path = entry.path();
         if path.is_dir() {
-            fs::remove_dir_all(&path).map_err(|e| format!("删除子目录失败 {}：{e}", path.display()))?;
+            fs::remove_dir_all(&path)
+                .map_err(|e| format!("删除子目录失败 {}：{e}", path.display()))?;
         } else {
             fs::remove_file(&path).map_err(|e| format!("删除文件失败 {}：{e}", path.display()))?;
         }
     }
 
-    let _ = log_manager.append(ts, "info", &format!("将临时目录内容移动到导出目录：{} → {}", temp_dir.display(), export_dir.display()));
+    let _ = log_manager.append(
+        ts,
+        "info",
+        &format!(
+            "将临时目录内容移动到导出目录：{} → {}",
+            temp_dir.display(),
+            export_dir.display()
+        ),
+    );
 
     for entry in fs::read_dir(temp_dir).map_err(|e| format!("读取临时目录失败：{e}"))? {
         let entry = entry.map_err(|e| format!("读取目录条目失败：{e}"))?;
         let src = entry.path();
         let dst = export_dir.join(entry.file_name());
-        fs::rename(&src, &dst).map_err(|e| format!("移动文件失败 {} → {}：{e}", src.display(), dst.display()))?;
+        fs::rename(&src, &dst)
+            .map_err(|e| format!("移动文件失败 {} → {}：{e}", src.display(), dst.display()))?;
     }
 
     Ok(())

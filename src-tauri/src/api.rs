@@ -94,14 +94,15 @@ impl ApiClient {
         prime_id: &str,
         limit: usize,
     ) -> Result<Vec<Note>, String> {
-        let url = format!(
-            "{BASE_URL}{NOTES_ENDPOINT}/{prime_id}/children"
-        );
+        let url = format!("{BASE_URL}{NOTES_ENDPOINT}/{prime_id}/children");
         let response = self
             .client
             .get(url)
             .bearer_auth(&self.token)
-            .query(&[("limit", limit.to_string()), ("sort", "edit_desc".to_string())])
+            .query(&[
+                ("limit", limit.to_string()),
+                ("sort", "edit_desc".to_string()),
+            ])
             .send()
             .await
             .map_err(|error| format!("failed to request note children: {error}"))?;

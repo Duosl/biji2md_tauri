@@ -103,11 +103,7 @@ impl CacheManager {
         let (exists, cached_at, total_count) = if self.cache.notes.is_empty() {
             (false, None, 0)
         } else {
-            (
-                true,
-                Some(self.cache.cached_at),
-                self.cache.notes.len(),
-            )
+            (true, Some(self.cache.cached_at), self.cache.notes.len())
         };
 
         let file_size_bytes = if exists {

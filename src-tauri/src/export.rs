@@ -14,9 +14,16 @@ enum ExportStructure {
     ByTopic,
 }
 
+#[derive(Clone, Copy)]
+enum LinkFormat {
+    Wikilink,
+    Markdown,
+}
+
 pub struct Exporter {
     export_dir: PathBuf,
     structure: ExportStructure,
+    link_format: LinkFormat,
     used_names: HashSet<String>,
 }
 
@@ -24,13 +31,11 @@ impl Exporter {
     pub fn new(
         export_dir: impl AsRef<Path>,
         structure: Option<&str>,
+        link_format: Option<&str>,
     ) -> Result<Self, String> {
         let export_dir = export_dir.as_ref().to_path_buf();
         if export_dir.exists() && !export_dir.is_dir() {
-            return Err(format!(
-                "导出路径不是目录: {}",
-                export_dir.display()
-            ));
+            return Err(format!("导出路径不是目录: {}", export_dir.display()));
         }
         match fs::create_dir_all(&export_dir) {
             Ok(()) => {}
@@ -42,6 +47,7 @@ impl Exporter {
         Ok(Self {
             export_dir,
             structure: ExportStructure::from_optional(structure),
+            link_format: LinkFormat::from_optional(link_format),
             used_names: HashSet::new(),
         })
     }
@@ -73,7 +79,12 @@ impl Exporter {
         let content = self.render_note(note);
 
         if let Some(parent) = file_path.parent() {
-            eprintln!("[DEBUG-EXPORT] export_note create_dir_all: {} (exists={}, is_dir={})", parent.display(), parent.exists(), parent.exists() && parent.is_dir());
+            eprintln!(
+                "[DEBUG-EXPORT] export_note create_dir_all: {} (exists={}, is_dir={})",
+                parent.display(),
+                parent.exists(),
+                parent.exists() && parent.is_dir()
+            );
             fs::create_dir_all(parent)
                 .map_err(|error| format!("failed to create markdown parent directory: {error}"))?;
         }
@@ -130,75 +141,104 @@ impl ExportStructure {
     }
 }
 
-impl Exporter {
-    pub fn render_note(&self, note: &Note) -> String {
-    let tags = note
-        .tags
-        .iter()
-        .map(|tag| yaml_string(&tag.name))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let topics = note
-        .topics
-        .iter()
-        .map(|topic| yaml_string(&topic.topic_name))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let title = if note.title.trim().is_empty() {
-        "未命名"
-    } else {
-        note.title.trim()
-    };
-
-    let normalized_content = note.content.replace("\r\n", "\n");
-
-    let mut frontmatter = format!(
-        "title: {}\nnote_id: {}\ntags: [{}]\ntopics: [{}]\ncreated_at: {}\nupdated_at: {}",
-        yaml_string(title),
-        yaml_string(&note.id),
-        tags,
-        topics,
-        yaml_string(&note.created_at),
-        yaml_string(&note.edit_time)
-    );
-
-    if let Some(ref parent_id) = note.parent_id {
-        frontmatter.push_str(&format!("\nparent_id: {}", yaml_string(parent_id)));
-    }
-
-    let mut body = normalized_content;
-
-    if !note.sub_notes.is_empty() {
-        body.push_str("\n\n## 子笔记\n");
-        for child in &note.sub_notes {
-            let child_file = note_file_name(child);
-            body.push_str(&format!("- [[{}]]\n", child_file));
+impl LinkFormat {
+    fn from_optional(value: Option<&str>) -> Self {
+        match value.unwrap_or(crate::config::DEFAULT_LINK_FORMAT) {
+            "markdown" => Self::Markdown,
+            _ => Self::Wikilink,
         }
     }
+}
 
-    if let (Some(ref parent_title), Some(ref parent_id)) = (&note.parent_title, &note.parent_id) {
-        let parent = Note {
-            id: parent_id.clone(),
-            title: parent_title.clone(),
-            content: String::new(),
-            prime_id: None,
-            parent_id: None,
-            parent_title: None,
-            tags: Vec::new(),
-            topics: Vec::new(),
-            edit_time: String::new(),
-            created_at: note.created_at.clone(),
-            sub_note_count: 0,
-            sub_notes: Vec::new(),
+impl Exporter {
+    pub fn render_note(&self, note: &Note) -> String {
+        let tags = note
+            .tags
+            .iter()
+            .map(|tag| yaml_string(&tag.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let topics = note
+            .topics
+            .iter()
+            .map(|topic| yaml_string(&topic.topic_name))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let title = if note.title.trim().is_empty() {
+            "未命名"
+        } else {
+            note.title.trim()
         };
-        let parent_file = note_file_name(&parent);
-        body.push_str(&format!("\n\n---\n[[{}]]\n", parent_file));
+
+        let normalized_content = note.content.replace("\r\n", "\n");
+
+        let mut frontmatter = format!(
+            "title: {}\nnote_id: {}\ntags: [{}]\ntopics: [{}]\ncreated_at: {}\nupdated_at: {}",
+            yaml_string(title),
+            yaml_string(&note.id),
+            tags,
+            topics,
+            yaml_string(&note.created_at),
+            yaml_string(&note.edit_time)
+        );
+
+        if let Some(ref parent_id) = note.parent_id {
+            frontmatter.push_str(&format!("\nparent_id: {}", yaml_string(parent_id)));
+        }
+
+        let mut body = normalized_content;
+
+        if !note.sub_notes.is_empty() {
+            body.push_str("\n\n## 子笔记\n");
+            for child in &note.sub_notes {
+                body.push_str(&format!("- {}\n", self.format_note_link(note, child)));
+            }
+        }
+
+        if let (Some(ref parent_title), Some(ref parent_id)) = (&note.parent_title, &note.parent_id)
+        {
+            let parent = Note {
+                id: parent_id.clone(),
+                title: parent_title.clone(),
+                content: String::new(),
+                prime_id: None,
+                parent_id: None,
+                parent_title: None,
+                tags: note.tags.clone(),
+                topics: note.topics.clone(),
+                edit_time: note.edit_time.clone(),
+                created_at: note.created_at.clone(),
+                sub_note_count: 0,
+                sub_notes: Vec::new(),
+            };
+            body.push_str(&format!(
+                "\n\n---\n{}\n",
+                self.format_note_link(note, &parent)
+            ));
+        }
+
+        format!("---\n{frontmatter}\n---\n\n{body}\n")
     }
 
-    format!("---\n{frontmatter}\n---\n\n{body}\n")
-}
+    fn format_note_link(&self, source: &Note, target: &Note) -> String {
+        match self.link_format {
+            LinkFormat::Wikilink => format!("[[{}]]", note_file_name(target)),
+            LinkFormat::Markdown => {
+                let label = markdown_label(if target.title.trim().is_empty() {
+                    "未命名"
+                } else {
+                    target.title.trim()
+                });
+                let href = relative_markdown_path(
+                    &self.preview_relative_path(source),
+                    &self.preview_relative_path(target),
+                );
+                format!("[{label}](<{href}>)")
+            }
+        }
+    }
 }
 
 fn note_file_name(note: &Note) -> String {
@@ -209,7 +249,11 @@ fn note_file_name(note: &Note) -> String {
     };
 
     let stem = sanitize_component(title);
-    let stem = if stem.is_empty() { "untitled".to_string() } else { stem };
+    let stem = if stem.is_empty() {
+        "untitled".to_string()
+    } else {
+        stem
+    };
     format!("{stem}.md")
 }
 
@@ -281,6 +325,53 @@ fn sanitize_component(value: &str) -> String {
         .chars()
         .take(120)
         .collect()
+}
+
+fn relative_markdown_path(source_file: &str, target_file: &str) -> String {
+    let source_dir = source_file
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or("");
+    let source_parts = source_dir
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    let target_parts = target_file
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+
+    let mut common = 0;
+    while common < source_parts.len()
+        && common < target_parts.len()
+        && source_parts[common] == target_parts[common]
+    {
+        common += 1;
+    }
+
+    let mut parts = Vec::new();
+    for _ in common..source_parts.len() {
+        parts.push("..".to_string());
+    }
+    parts.extend(
+        target_parts[common..]
+            .iter()
+            .map(|part| (*part).to_string()),
+    );
+
+    if parts.is_empty() {
+        note_file_name_from_path(target_file)
+    } else {
+        parts.join("/")
+    }
+}
+
+fn note_file_name_from_path(path: &str) -> String {
+    path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+fn markdown_label(value: &str) -> String {
+    value.replace('\\', "\\\\").replace(']', "\\]")
 }
 
 fn yaml_string(value: &str) -> String {
