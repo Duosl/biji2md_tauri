@@ -76,10 +76,10 @@ async fn run_sync_inner(
         &format!("输出目录：{export_dir}"),
     )?;
     let config = load_config()?;
-    let mut client = ApiClient::new(&token)?;
+    let client = ApiClient::new(&token)?;
     let mut cache = CacheManager::load().unwrap_or_default();
     let mut index = IndexManager::load(&cache_dir)?;
-    let exporter = Exporter::new(
+    let mut exporter = Exporter::new(
         &export_dir,
         config.export_structure.as_deref(),
     )?;

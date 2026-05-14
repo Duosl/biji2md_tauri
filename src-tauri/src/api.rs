@@ -11,10 +11,12 @@ pub struct NotesPage {
     pub total_items: Option<u64>,
 }
 
+use std::sync::Mutex;
+
 pub struct ApiClient {
     client: Client,
     token: String,
-    last_raw_notes: Vec<serde_json::Value>,
+    last_raw_notes: Mutex<Vec<serde_json::Value>>,
 }
 
 impl ApiClient {
@@ -27,16 +29,16 @@ impl ApiClient {
         Ok(Self {
             client,
             token: token.to_string(),
-            last_raw_notes: Vec::new(),
+            last_raw_notes: Mutex::new(Vec::new()),
         })
     }
 
-    pub fn take_raw_notes(&mut self) -> Vec<serde_json::Value> {
-        std::mem::take(&mut self.last_raw_notes)
+    pub fn take_raw_notes(&self) -> Vec<serde_json::Value> {
+        std::mem::take(&mut self.last_raw_notes.lock().unwrap())
     }
 
     pub async fn get_notes_page(
-        &mut self,
+        &self,
         limit: usize,
         since_id: Option<&str>,
         sort: &str,
@@ -76,8 +78,9 @@ impl ApiClient {
             .map_err(|error| format!("failed to decode notes response: {error}"))?;
 
         let raw = extract_raw_list(&value);
-        self.last_raw_notes = raw.clone();
         let notes = extract_notes_from_list(&raw);
+        self.last_raw_notes.lock().unwrap().clear();
+        self.last_raw_notes.lock().unwrap().extend(raw);
 
         Ok(NotesPage {
             notes,
@@ -87,7 +90,7 @@ impl ApiClient {
     }
 
     pub async fn get_note_children(
-        &mut self,
+        &self,
         prime_id: &str,
         limit: usize,
     ) -> Result<Vec<Note>, String> {
@@ -122,9 +125,11 @@ impl ApiClient {
             .map_err(|error| format!("failed to decode children response: {error}"))?;
 
         let raw = extract_raw_list(&value);
-        self.last_raw_notes = raw.clone();
+        let children = extract_notes_from_list(&raw);
+        self.last_raw_notes.lock().unwrap().clear();
+        self.last_raw_notes.lock().unwrap().extend(raw);
 
-        Ok(extract_notes_from_list(&raw))
+        Ok(children)
     }
 }
 

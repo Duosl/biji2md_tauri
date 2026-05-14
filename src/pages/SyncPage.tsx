@@ -503,8 +503,8 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
                   {filter.label}
                 </button>
               ))}
-              <span className="log-count">{filteredLogs.length}</span>
             </div>
+              <span className="log-count">{filteredLogs.length}</span>
 
             <div className="log-scroll">
             {logs.length === 0 ? (

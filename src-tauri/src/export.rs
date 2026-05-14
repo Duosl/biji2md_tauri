@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -16,6 +17,7 @@ enum ExportStructure {
 pub struct Exporter {
     export_dir: PathBuf,
     structure: ExportStructure,
+    used_names: HashSet<String>,
 }
 
 impl Exporter {
@@ -30,6 +32,7 @@ impl Exporter {
         Ok(Self {
             export_dir,
             structure: ExportStructure::from_optional(structure),
+            used_names: HashSet::new(),
         })
     }
 
@@ -50,11 +53,12 @@ impl Exporter {
     }
 
     pub fn export_note(
-        &self,
+        &mut self,
         note: &Note,
         previous_relative_path: Option<&str>,
     ) -> Result<String, String> {
-        let relative_path = self.preview_relative_path(note);
+        let base_path = self.preview_relative_path(note);
+        let relative_path = self.resolve_name_conflict(&base_path);
         let file_path = self.export_dir.join(&relative_path);
         let content = self.render_note(note);
 
@@ -79,6 +83,28 @@ impl Exporter {
         }
 
         Ok(relative_path)
+    }
+
+    fn resolve_name_conflict(&mut self, base_path: &str) -> String {
+        if !self.used_names.contains(base_path) {
+            self.used_names.insert(base_path.to_string());
+            return base_path.to_string();
+        }
+
+        let (stem, ext) = base_path.rsplit_once('.').unwrap_or((base_path, ""));
+        let mut seq = 2_u32;
+        loop {
+            let candidate = if ext.is_empty() {
+                format!("{stem}_{seq}")
+            } else {
+                format!("{stem}_{seq}.{ext}")
+            };
+            if !self.used_names.contains(&candidate) {
+                self.used_names.insert(candidate.clone());
+                return candidate;
+            }
+            seq += 1;
+        }
     }
 }
 

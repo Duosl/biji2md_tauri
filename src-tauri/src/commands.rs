@@ -678,7 +678,7 @@ pub fn get_cache_info() -> Result<CacheInfo, String> {
 pub async fn reexport_from_cache(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<SyncCompletedEvent, String> {
+) -> Result<(), String> {
     let (export_dir, cache, cancel_flag, cache_dir) = {
         let mut guard = state
             .inner
@@ -730,27 +730,14 @@ pub async fn reexport_from_cache(
     let app_clone = app.clone();
     let app_emit = app.clone();
 
-    tokio::spawn(async move {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let rt = tokio::runtime::Handle::current();
-            rt.block_on(run_reexport(app_clone, runtime_state, export_dir, cache, cancel_flag, cache_dir))
-        }));
-
-        let completed = match result {
-            Ok(Ok(c)) => Some(c),
-            Ok(Err(e)) => {
+    tauri::async_runtime::spawn(async move {
+        let completed = match run_reexport(app_clone, runtime_state, export_dir, cache, cancel_flag, cache_dir).await {
+            Ok(c) => Some(c),
+            Err(e) => {
                 let _ = app_emit.emit("sync_log", SyncLogEvent {
                     ts: crate::sync::now_millis(),
                     level: "error".to_string(),
                     message: format!("重导出失败：{e}"),
-                });
-                None
-            }
-            Err(_) => {
-                let _ = app_emit.emit("sync_log", SyncLogEvent {
-                    ts: crate::sync::now_millis(),
-                    level: "error".to_string(),
-                    message: "重导出过程中发生内部错误".to_string(),
                 });
                 None
             }
@@ -776,15 +763,7 @@ pub async fn reexport_from_cache(
         }
     });
 
-    Ok(SyncCompletedEvent {
-        total: 0,
-        created: 0,
-        updated: 0,
-        skipped: 0,
-        failed: 0,
-        cancelled: false,
-        index_path: String::new(),
-    })
+    Ok(())
 }
 
 async fn run_reexport(
@@ -809,7 +788,7 @@ async fn run_reexport(
         .unwrap_or_else(|| std::path::PathBuf::from(&export_dir).join("index.json"));
 
     let config = load_config()?;
-    let exporter = Exporter::new(
+    let mut exporter = Exporter::new(
         &export_dir,
         config.export_structure.as_deref(),
     )?;
