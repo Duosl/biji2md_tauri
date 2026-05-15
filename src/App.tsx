@@ -8,6 +8,7 @@ import { Toolbar } from "./components/Toolbar";
 import { SyncPage } from "./pages/SyncPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { OnboardingGuide } from "./components/OnboardingGuide";
+import { RewardDialog } from "./components/RewardDialog";
 import { useUpdater } from "./hooks/useUpdater";
 import { useSync } from "./hooks/useSync";
 import { useCache } from "./hooks/useCache";
@@ -59,6 +60,7 @@ export function App() {
   const [currentPage, setCurrentPage] = useState<PageKey>("sync");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showRewardDialog, setShowRewardDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [onboardingState, setOnboardingState] = useState({
     hasToken: false,
@@ -211,7 +213,17 @@ export function App() {
             </nav>
 
             <div className="sidebar-footer">
-              <p>v{appVersion}</p>
+              <button className="reward-entry" onClick={() => setShowRewardDialog(true)}>
+                <span className="reward-entry-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M20.4 4.6a5.5 5.5 0 0 0-7.8 0L12 5.2l-.6-.6a5.5 5.5 0 0 0-7.8 7.8l.6.6L12 20.8l7.8-7.8.6-.6a5.5 5.5 0 0 0 0-7.8Z" />
+                  </svg>
+                </span>
+                <span className="reward-entry-copy">
+                  <span>打赏支持</span>
+                  <small>v{appVersion}</small>
+                </span>
+              </button>
             </div>
           </aside>
         )}
@@ -231,6 +243,11 @@ export function App() {
         onComplete={handleOnboardingComplete}
         onOpenSettings={handleOnboardingOpenSettings}
         onSkip={handleOnboardingSkip}
+      />
+
+      <RewardDialog
+        isOpen={showRewardDialog}
+        onClose={() => setShowRewardDialog(false)}
       />
     </div>
   );
