@@ -10,6 +10,7 @@ export type Settings = {
   defaultPageSize: number;
   lastMode: "incremental" | "full" | string;
   showSyncTips: boolean;
+  onboardingCompleted: boolean;
 };
 
 export type SyncCounters = {

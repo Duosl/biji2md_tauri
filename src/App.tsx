@@ -62,7 +62,9 @@ export function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [onboardingState, setOnboardingState] = useState({
     hasToken: false,
-    hasExportDir: false
+    hasExportDir: false,
+    tokenMasked: "",
+    exportDir: ""
   });
   const {
     state: updateState,
@@ -93,12 +95,18 @@ export function App() {
 
         const settings = await invoke<Settings>("get_settings");
         const hasToken = settings.hasToken;
-        const hasExportDir = !!settings.defaultOutputDir?.trim();
-        setOnboardingState({ hasToken, hasExportDir });
+        const exportDir = settings.defaultOutputDir?.trim() || "";
+        const hasExportDir = !!exportDir;
+        setOnboardingState({
+          hasToken,
+          hasExportDir,
+          tokenMasked: settings.tokenMasked || "",
+          exportDir
+        });
 
         const version = await invoke<string>("get_app_version");
         setAppVersion(version);
-        if (!hasToken || !hasExportDir) {
+        if (!settings.onboardingCompleted && (!hasToken || !hasExportDir)) {
           setShowOnboarding(true);
         }
       } catch (err) {
@@ -110,13 +118,33 @@ export function App() {
     initApp();
   }, []);
 
+  const markOnboardingSeen = async () => {
+    try {
+      await invoke("save_setting_field", {
+        input: { field: "onboardingCompleted", value: true }
+      });
+    } catch (err) {
+      console.error("Failed to save onboarding state:", err);
+    }
+  };
+
   const handleOnboardingComplete = () => {
-    setOnboardingState({ hasToken: true, hasExportDir: true });
+    void markOnboardingSeen();
+    setOnboardingState((current) => ({ ...current, hasToken: true, hasExportDir: true }));
     void sync.refreshSettings();
     setShowOnboarding(false);
   };
 
+  const handleOnboardingOpenSettings = () => {
+    void markOnboardingSeen();
+    setOnboardingState((current) => ({ ...current, hasToken: true, hasExportDir: true }));
+    void sync.refreshSettings();
+    setShowOnboarding(false);
+    setCurrentPage("settings");
+  };
+
   const handleOnboardingSkip = () => {
+    void markOnboardingSeen();
     setShowOnboarding(false);
   };
 
@@ -198,7 +226,10 @@ export function App() {
         isOpen={showOnboarding}
         hasToken={onboardingState.hasToken}
         hasExportDir={onboardingState.hasExportDir}
+        tokenMasked={onboardingState.tokenMasked}
+        defaultExportDir={onboardingState.exportDir}
         onComplete={handleOnboardingComplete}
+        onOpenSettings={handleOnboardingOpenSettings}
         onSkip={handleOnboardingSkip}
       />
     </div>

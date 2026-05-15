@@ -121,6 +121,11 @@ pub fn save_setting_field(input: SaveSettingFieldInput) -> Result<AppSettings, S
                 config.show_sync_tips = Some(val);
             }
         }
+        "onboardingCompleted" => {
+            if let Some(val) = input.value.as_bool() {
+                config.onboarding_completed = Some(val);
+            }
+        }
         _ => return Err(format!("未知字段: {}", input.field)),
     }
 
@@ -636,6 +641,7 @@ fn to_app_settings(config: crate::config::AppConfig) -> AppSettings {
             .unwrap_or_else(|| "incremental".to_string()),
         file_name_pattern: "title".to_string(),
         show_sync_tips: config.show_sync_tips.unwrap_or(true),
+        onboarding_completed: config.onboarding_completed.unwrap_or(false),
     }
 }
 

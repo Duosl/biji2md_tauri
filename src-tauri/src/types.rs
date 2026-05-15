@@ -198,6 +198,7 @@ pub struct AppSettings {
     pub last_mode: String,
     pub file_name_pattern: String,
     pub show_sync_tips: bool,
+    pub onboarding_completed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

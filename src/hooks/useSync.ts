@@ -61,7 +61,8 @@ export function useSync() {
     defaultOutputDir: "",
     defaultPageSize: 100,
     lastMode: "incremental",
-    showSyncTips: true
+    showSyncTips: true,
+    onboardingCompleted: false
   });
   const [snapshot, setSnapshot] = useState<SyncSnapshot>(emptySnapshot);
   const [summary, setSummary] = useState<SyncCompletedEvent | null>(null);

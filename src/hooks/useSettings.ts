@@ -22,7 +22,8 @@ export function useSettings() {
     defaultOutputDir: "",
     defaultPageSize: 100,
     lastMode: "incremental",
-    showSyncTips: true
+    showSyncTips: true,
+    onboardingCompleted: false
   });
 
   // 加载状态

@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub last_mode: Option<String>,
     #[serde(default)]
     pub show_sync_tips: Option<bool>,
+    #[serde(default)]
+    pub onboarding_completed: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

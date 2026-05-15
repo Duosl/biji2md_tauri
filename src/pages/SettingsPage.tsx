@@ -466,6 +466,63 @@ export function SettingsPage({
     dirExportConfig?.linkFormat
   );
 
+  const exportStructureOptions: Array<{
+    value: DirExportConfig["structure"];
+    title: string;
+    description: string;
+    samplePath: string;
+  }> = [
+    {
+      value: "by_topic",
+      title: "按知识库分组",
+      description: "不同知识库导出到不同目录",
+      samplePath: "知识库名称/笔记名.md",
+    },
+    {
+      value: "by_month",
+      title: "按月份分组",
+      description: "把笔记放在对应月份目录下",
+      samplePath: "2026-05/笔记名.md",
+    },
+    {
+      value: "by_tag",
+      title: "按主标签分组",
+      description: "把笔记的第一个标签作为目录名",
+      samplePath: "主标签/笔记名.md",
+    },
+    {
+      value: "flat",
+      title: "平铺",
+      description: "所有笔记都放在一个目录下",
+      samplePath: "笔记名.md",
+    },
+  ];
+
+  const linkFormatOptions: Array<{
+    value: DirExportConfig["linkFormat"];
+    title: string;
+    description: string;
+    sampleLink: string;
+  }> = [
+    {
+      value: "wikilink",
+      title: "Obsidian Wikilink",
+      description: "Obsidian 双链",
+      sampleLink: "[[子笔记.md]]",
+    },
+    {
+      value: "markdown",
+      title: "Markdown 链接",
+      description: "通用阅读器",
+      sampleLink: "[子笔记](<子笔记.md>)",
+    },
+  ];
+
+  const selectedStructureOption = exportStructureOptions.find((option) => option.value === selectedExportStructure)
+    ?? exportStructureOptions[0];
+  const selectedLinkOption = linkFormatOptions.find((option) => option.value === selectedLinkFormat)
+    ?? linkFormatOptions[0];
+
   return (
     <div className="page-content">
       <header className="content-header">
@@ -569,78 +626,56 @@ export function SettingsPage({
         </div>
 
         <div className="form-group">
-          <label className="form-label">
-            导出目录结构
-          </label>
-          <div className="radio-group">
-            <label className={`radio-item ${selectedExportStructure === "by_topic" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="exportStructure"
-                value="by_topic"
-                checked={selectedExportStructure === "by_topic"}
-                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
-              />
-              <span>按知识库分组</span>
-            </label>
-            <label className={`radio-item ${selectedExportStructure === "by_month" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="exportStructure"
-                value="by_month"
-                checked={selectedExportStructure === "by_month"}
-                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
-              />
-              <span>按月份分组</span>
-            </label>
-            <label className={`radio-item ${selectedExportStructure === "by_tag" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="exportStructure"
-                value="by_tag"
-                checked={selectedExportStructure === "by_tag"}
-                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
-              />
-              <span>按主标签分组</span>
-            </label>
-            <label className={`radio-item ${selectedExportStructure === "flat" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="exportStructure"
-                value="flat"
-                checked={selectedExportStructure === "flat"}
-                onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
-              />
-              <span>平铺（所有文件在同一目录）</span>
-            </label>
+          <div className="form-label form-label-row">
+            <span>导出目录结构</span>
+            <span className="preview">预览：{selectedStructureOption.samplePath}</span>
+          </div>
+          <div className="radio-group option-grid">
+            {exportStructureOptions.map((option) => (
+              <label
+                key={option.value}
+                className={`radio-item option-card ${selectedExportStructure === option.value ? "active" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="exportStructure"
+                  value={option.value}
+                  checked={selectedExportStructure === option.value}
+                  onChange={(e) => handleExportConfigChange("exportStructure", e.target.value)}
+                />
+                <span className="option-card-body">
+                  <strong>{option.title}</strong>
+                  <small>{option.description}</small>
+                </span>
+              </label>
+            ))}
           </div>
         </div>
 
         <div className="form-group">
-          <label className="form-label">
-            父子笔记链接格式
-          </label>
-          <div className="radio-group">
-            <label className={`radio-item ${selectedLinkFormat === "wikilink" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="linkFormat"
-                value="wikilink"
-                checked={selectedLinkFormat === "wikilink"}
-                onChange={(e) => handleExportConfigChange("linkFormat", e.target.value)}
-              />
-              <span>Obsidian Wikilink（[[笔记名.md]]）</span>
-            </label>
-            <label className={`radio-item ${selectedLinkFormat === "markdown" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="linkFormat"
-                value="markdown"
-                checked={selectedLinkFormat === "markdown"}
-                onChange={(e) => handleExportConfigChange("linkFormat", e.target.value)}
-              />
-              <span>Markdown 链接（[笔记名](&lt;路径.md&gt;)）</span>
-            </label>
+          <div className="form-label form-label-row">
+            <span>父子笔记链接格式</span>
+            <span className="preview">预览：{selectedLinkOption.sampleLink}</span>
+          </div>
+          <div className="radio-group option-grid option-grid-two">
+            {linkFormatOptions.map((option) => (
+              <label
+                key={option.value}
+                className={`radio-item option-card ${selectedLinkFormat === option.value ? "active" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="linkFormat"
+                  value={option.value}
+                  checked={selectedLinkFormat === option.value}
+                  onChange={(e) => handleExportConfigChange("linkFormat", e.target.value)}
+                />
+                <span className="option-card-body">
+                  <strong>{option.title}</strong>
+                  <small>{option.description}</small>
+                </span>
+              </label>
+            ))}
           </div>
         </div>
 
