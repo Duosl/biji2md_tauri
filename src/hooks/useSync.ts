@@ -336,3 +336,5 @@ export function useSync() {
     openLogDir
   };
 }
+
+export type SyncController = ReturnType<typeof useSync>;

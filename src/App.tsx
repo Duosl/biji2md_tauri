@@ -9,6 +9,8 @@ import { SyncPage } from "./pages/SyncPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { OnboardingGuide } from "./components/OnboardingGuide";
 import { useUpdater } from "./hooks/useUpdater";
+import { useSync } from "./hooks/useSync";
+import { useCache } from "./hooks/useCache";
 import type { PageKey, NavItem, Settings } from "./types";
 
 const navItems: NavItem[] = [
@@ -58,7 +60,6 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [syncPageVersion, setSyncPageVersion] = useState(0);
   const [onboardingState, setOnboardingState] = useState({
     hasToken: false,
     hasExportDir: false
@@ -70,6 +71,17 @@ export function App() {
     installUpdate,
   } = useUpdater();
   const [appVersion, setAppVersion] = useState("0.0.0");
+  const sync = useSync();
+  const cache = useCache();
+
+  useEffect(() => {
+    void cache.loadCacheInfo();
+  }, [cache.loadCacheInfo]);
+
+  useEffect(() => {
+    if (!sync.summary) return;
+    void cache.loadCacheInfo();
+  }, [sync.summary, cache.loadCacheInfo]);
 
   useEffect(() => {
     async function initApp() {
@@ -100,7 +112,7 @@ export function App() {
 
   const handleOnboardingComplete = () => {
     setOnboardingState({ hasToken: true, hasExportDir: true });
-    setSyncPageVersion((current) => current + 1);
+    void sync.refreshSettings();
     setShowOnboarding(false);
   };
 
@@ -113,21 +125,24 @@ export function App() {
       case "sync":
         return (
           <SyncPage
-            key={syncPageVersion}
+            sync={sync}
+            cache={cache}
             onOpenSettings={() => setCurrentPage("settings")}
           />
         );
       case "settings":
         return (
           <SettingsPage
+            cache={cache}
             updateState={updateState}
             onCheckUpdate={checkForUpdates}
             onDownloadUpdate={downloadUpdate}
             onInstallUpdate={installUpdate}
+            onSettingsChanged={sync.refreshSettings}
           />
         );
       default:
-        return <SyncPage onOpenSettings={() => setCurrentPage("settings")} />;
+        return <SyncPage sync={sync} cache={cache} onOpenSettings={() => setCurrentPage("settings")} />;
     }
   };
 

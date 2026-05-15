@@ -6,16 +6,18 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useSettings } from "../hooks/useSettings";
-import { useCache } from "../hooks/useCache";
+import type { CacheController } from "../hooks/useCache";
 import type { UpdateState } from "../hooks/useUpdater";
 import type { DirExportConfig, SyncSnapshot } from "../types";
 import logoUrl from "../assets/ic_logo.svg";
 
 type SettingsPageProps = {
+  cache: CacheController;
   updateState: UpdateState;
   onCheckUpdate: (silent?: boolean) => Promise<void>;
   onDownloadUpdate: () => Promise<void>;
   onInstallUpdate: () => Promise<void>;
+  onSettingsChanged?: () => void;
 };
 
 type ReexportPhase = "hint" | "choice" | "picking" | "progress" | "success";
@@ -67,10 +69,12 @@ function normalizeLinkFormat(value?: string | null) {
 }
 
 export function SettingsPage({
+  cache,
   updateState,
   onCheckUpdate,
   onDownloadUpdate,
   onInstallUpdate,
+  onSettingsChanged,
 }: SettingsPageProps) {
   const {
     settings,
@@ -89,10 +93,9 @@ export function SettingsPage({
   const {
     cacheInfo,
     reexporting,
-    loadCacheInfo,
     reexportFromCache,
     reexportSafe,
-  } = useCache();
+  } = cache;
 
   const [reexportDismissed, setReexportDismissed] = useState(retainedReexportUiState.dismissed);
   const [reexportResult, setReexportResult] = useState<ReexportResult | null>(retainedReexportUiState.result);
@@ -125,7 +128,6 @@ export function SettingsPage({
   useEffect(() => {
     loadSettings();
     invoke<string>("get_app_version").then(setAppVersion).catch(() => {});
-    loadCacheInfo();
     invoke<SyncSnapshot>("get_sync_snapshot")
       .then((snapshot) => {
         if (!isCacheReexportMode(snapshot.mode)) return;
@@ -326,12 +328,14 @@ export function SettingsPage({
     const selected = await selectExportDir();
     if (selected) {
       await saveField("defaultOutputDir", selected);
+      onSettingsChanged?.();
     }
   };
 
   // 目录清空
   const handleClearDir = async () => {
     await saveField("defaultOutputDir", "");
+    onSettingsChanged?.();
   };
 
   // Token 保存
@@ -339,11 +343,13 @@ export function SettingsPage({
     const token = tokenDraft.trim();
     if (!token) return;
     await saveToken(token);
+    onSettingsChanged?.();
   };
 
   // Token 清空
   const handleClearToken = async () => {
     await clearToken();
+    onSettingsChanged?.();
   };
 
   const handleExportConfigChange = (key: string, value: string) => {

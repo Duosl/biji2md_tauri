@@ -58,3 +58,5 @@ export function useCache() {
 
   return { cacheInfo, reexporting, loadCacheInfo, reexportFromCache, reexportSafe };
 }
+
+export type CacheController = ReturnType<typeof useCache>;

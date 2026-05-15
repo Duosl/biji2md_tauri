@@ -3,8 +3,8 @@
    ========================================================================== */
 
 import { useEffect, useRef, useState } from "react";
-import { useSync } from "../hooks/useSync";
-import { useCache } from "../hooks/useCache";
+import type { SyncController } from "../hooks/useSync";
+import type { CacheController } from "../hooks/useCache";
 
 const LOG_FILTERS = [
   { key: "key", label: "关键节点" },
@@ -13,6 +13,8 @@ const LOG_FILTERS = [
 ] as const;
 
 type SyncPageProps = {
+  sync: SyncController;
+  cache: CacheController;
   onOpenSettings?: () => void;
 };
 
@@ -77,7 +79,7 @@ function isKeyLog(level: string, message: string) {
   return markers.some((marker) => normalized.includes(marker.toLowerCase()));
 }
 
-export function SyncPage({ onOpenSettings }: SyncPageProps) {
+export function SyncPage({ sync, cache, onOpenSettings }: SyncPageProps) {
   const {
     settings,
     snapshot,
@@ -94,8 +96,8 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
     loadHistoryLogs,
     openLogDir,
     openExportDir
-  } = useSync();
-  const { cacheInfo, loadCacheInfo } = useCache();
+  } = sync;
+  const { cacheInfo } = cache;
 
   const [statusText, setStatusText] = useState("准备就绪");
   const [logFilter, setLogFilter] = useState<LogFilterKey>("key");
@@ -127,10 +129,6 @@ export function SyncPage({ onOpenSettings }: SyncPageProps) {
       setShowLogs(true);
     }
   }, [logs.length, hasErrors]);
-  useEffect(() => {
-    void loadCacheInfo();
-  }, [loadCacheInfo]);
-
   const toggleLogs = () => {
     setShowLogs((prev) => {
       const next = !prev;
